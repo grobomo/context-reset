@@ -70,7 +70,8 @@ def count_claude_processes():
     try:
         out = subprocess.check_output(
             'tasklist /FI "IMAGENAME eq claude.exe" /NH',
-            encoding='utf-8', timeout=5, startupinfo=_si()
+            encoding='utf-8', timeout=5, startupinfo=_si(),
+            stderr=subprocess.DEVNULL
         )
         return out.count('claude.exe')
     except Exception:
@@ -82,7 +83,8 @@ def get_process_parent_and_name(pid):
     try:
         out = subprocess.check_output(
             f'wmic process where ProcessId={pid} get ParentProcessId,Name /value',
-            encoding='utf-8', timeout=3, startupinfo=_si()
+            encoding='utf-8', timeout=3, startupinfo=_si(),
+            stderr=subprocess.DEVNULL
         ).strip()
         parts = {}
         for line in out.split('\n'):
@@ -143,7 +145,8 @@ def find_shell_pid():
     try:
         tree_out = subprocess.check_output(
             f'wmic process where (ParentProcessId={tab_shell}) get Name /value',
-            encoding='utf-8', timeout=5, startupinfo=_si()
+            encoding='utf-8', timeout=5, startupinfo=_si(),
+            stderr=subprocess.DEVNULL
         ).lower()
         claude_children = tree_out.count('claude')
         if claude_children > 1:
@@ -201,6 +204,7 @@ def main():
     parser.add_argument("--project-dir", default=os.environ.get("CLAUDE_PROJECT_DIR", os.getcwd()))
     parser.add_argument("--prompt", default=None)
     parser.add_argument("--no-close", action="store_true", help="Don't close old tab")
+    parser.add_argument("--timeout", type=int, default=45, help="Phase 2 verification timeout in seconds")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
@@ -256,7 +260,7 @@ def main():
             return
 
         # Phase 2: Verify working
-        working = verify_claude_working(project_dir, timeout=45)
+        working = verify_claude_working(project_dir, timeout=args.timeout)
         if working:
             log("New Claude confirmed working")
             shell_pid = find_shell_pid()
