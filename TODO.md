@@ -1,6 +1,6 @@
 # context-reset
 
-## Status: Working. All edge cases handled.
+## Status: Production-ready.
 
 ## Completed
 - [x] Core script (wt new-tab, PowerShell)
@@ -12,8 +12,9 @@
 - [x] Timestamped audit log with daily rotation
 - [x] Fix: detached taskkill so Python exits before tree kill (prevents "cannot terminate itself")
 - [x] TODO.md target dir handled by session hook prompt ($CLAUDE_PROJECT_DIR)
+- [x] .gitignore, .github/publish.json, secret-scan.yml
+- [x] Test suite (scripts/test.py) — 10 tests, all passing
 
-## Next
-- [ ] Add .github/publish.json and secret-scan.yml
-- [ ] Add test script in scripts/
-- [ ] Add --timeout flag for configurable phase 2 timeout
+## Nice to have
+- [ ] --timeout flag for configurable phase 2 timeout (currently hardcoded 45s)
+- [ ] Linux/macOS support (currently Windows-only)
