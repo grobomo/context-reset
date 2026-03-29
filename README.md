@@ -4,12 +4,21 @@ Autonomous context reset for [Claude Code](https://docs.anthropic.com/en/docs/cl
 
 ## How it works
 
-1. Opens a new Windows Terminal tab with `claude` pointed at your project
+1. Opens a new terminal tab/window with `claude` pointed at your project
 2. Waits for the new Claude process to start (process count check)
 3. Verifies the new session is working (transcript file activity)
 4. Kills the old tab's shell process tree
 
 If any step fails, the old tab is preserved. Nothing is lost.
+
+## Platform support
+
+| Platform | Terminal | Tab launch | Tab color | Tab title | Kill method |
+|----------|----------|-----------|-----------|-----------|-------------|
+| Windows | Windows Terminal | `wt new-tab` | Yes | Yes | `taskkill /F /T` (detached) |
+| macOS | Terminal.app | `osascript` | No | No | `SIGTERM` to process group |
+| Linux | gnome-terminal | `gnome-terminal --tab` | No | Yes | `SIGTERM` to process group |
+| Linux (fallback) | any | background process | No | No | `SIGTERM` to process group |
 
 ## Usage
 
@@ -72,9 +81,11 @@ Use `--close-tab` to auto-close: temporarily sets `closeOnExit=always`, kills th
 
 ## Requirements
 
-- Windows 10/11 with Windows Terminal
 - Python 3.8+
 - Claude Code CLI (`claude`) in PATH
+- **Windows**: Windows Terminal (ships with Windows 11, available for Windows 10)
+- **macOS**: Terminal.app (default) or iTerm2
+- **Linux**: gnome-terminal recommended; falls back to background process
 
 ## Tests
 

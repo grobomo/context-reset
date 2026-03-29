@@ -20,4 +20,5 @@
 - [x] Test suite (scripts/test.py) — 17 tests, all passing
 - [x] README.md with usage, integration, and safety docs
 - [x] Pushed to grobomo/context-reset (public)
-- [ ] Linux/macOS support (currently Windows-only)
+- [x] Linux/macOS support (process mgmt, tab launch, kill via SIGTERM)
+- [x] Fix: build_prompt now tells new session to treat all `- [ ]` items as active tasks
