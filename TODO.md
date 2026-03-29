@@ -1,8 +1,5 @@
 # context-reset
 
-## Status: Complete. All features implemented, tested, documented, pushed.
-
-## Completed
 - [x] Core script (wt new-tab, PowerShell)
 - [x] Dry-run tested
 - [x] Live tested — works end to end (multiple projects, 2026-03-29)
@@ -23,6 +20,4 @@
 - [x] Test suite (scripts/test.py) — 17 tests, all passing
 - [x] README.md with usage, integration, and safety docs
 - [x] Pushed to grobomo/context-reset (public)
-
-## Nice to have
 - [ ] Linux/macOS support (currently Windows-only)

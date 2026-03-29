@@ -142,7 +142,9 @@ def build_prompt(project_dir):
     if os.path.exists(todo):
         return (
             "Context was reset. Read TODO.md and continue working. "
-            "Do not ask what to do. Pick up where the last session left off."
+            "Do not ask what to do. Pick up where the last session left off. "
+            "Any unchecked '- [ ]' item is an active task — do it regardless of "
+            "what section or header it's under."
         )
     return (
         "Context was reset. Check TODO.md, CLAUDE.md, or git log for state. "
