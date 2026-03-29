@@ -27,10 +27,65 @@ def test(name, condition):
 # --- build_prompt ---
 print("\n=== build_prompt ===")
 with tempfile.TemporaryDirectory() as d:
-    test("no TODO.md -> generic prompt", "Check TODO.md" in context_reset.build_prompt(d))
-    with open(os.path.join(d, "TODO.md"), "w") as f:
-        f.write("# tasks\n")
-    test("with TODO.md -> continue prompt", "continue working" in context_reset.build_prompt(d).lower())
+    prompt = context_reset.build_prompt(d)
+    test("no session logs -> fallback prompt", "Context was reset" in prompt and "TODO.md" in prompt)
+    # With a fake JSONL log, build_prompt should write SESSION_STATE.md and reference it
+    fake_project = os.path.join(d, "sp")
+    os.makedirs(fake_project)
+    logs_slug = os.path.abspath(fake_project).replace("\\", "-").replace("/", "-").replace(":", "-")
+    if logs_slug.startswith("-"):
+        logs_slug = logs_slug[1:]
+    fake_logs = os.path.join(d, "dotclaude", "projects", logs_slug)
+    os.makedirs(fake_logs)
+    with open(os.path.join(fake_logs, "session.jsonl"), "w") as f:
+        f.write('{"message":{"role":"assistant","content":[{"type":"text","text":"working on feature X"}]}}\n')
+    orig_fn = context_reset.get_project_logs_dir
+    context_reset.get_project_logs_dir = lambda proj: fake_logs
+    prompt2 = context_reset.build_prompt(fake_project)
+    test("with session logs -> references SESSION_STATE.md", "SESSION_STATE.md" in prompt2)
+    test("writes SESSION_STATE.md file", os.path.exists(os.path.join(fake_project, "SESSION_STATE.md")))
+    context_reset.get_project_logs_dir = orig_fn
+
+# --- extract_session_context ---
+print("\n=== extract_session_context ===")
+with tempfile.TemporaryDirectory() as d:
+    # No logs -> empty
+    test("no logs -> empty string", context_reset.extract_session_context(d) == "")
+
+    # With fake logs
+    fake_project = os.path.join(d, "proj")
+    os.makedirs(fake_project)
+    logs_slug = os.path.abspath(fake_project).replace("\\", "-").replace("/", "-").replace(":", "-")
+    if logs_slug.startswith("-"):
+        logs_slug = logs_slug[1:]
+    fake_logs = os.path.join(d, "dotclaude", "projects", logs_slug)
+    os.makedirs(fake_logs)
+    import json as _json
+    entries = [
+        {"message": {"role": "assistant", "content": [{"type": "text", "text": "I will fix the bug"}]}},
+        {"message": {"role": "user", "content": [{"type": "text", "text": "looks good"}]}},
+        {"message": {"role": "assistant", "content": [{"type": "tool_use", "id": "t1", "name": "Bash", "input": {}}]}},
+        {"type": "progress", "data": {"type": "hook_progress"}},
+        {"message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1", "content": "ok"}]}},
+        {"message": {"role": "assistant", "content": [{"type": "text", "text": "Done fixing"}]}},
+    ]
+    with open(os.path.join(fake_logs, "session.jsonl"), "w") as f:
+        for e in entries:
+            f.write(_json.dumps(e) + "\n")
+    orig_fn2 = context_reset.get_project_logs_dir
+    context_reset.get_project_logs_dir = lambda proj: fake_logs
+    ctx = context_reset.extract_session_context(fake_project)
+    test("extracts assistant text", "[assistant] I will fix the bug" in ctx)
+    test("extracts user text", "[user] looks good" in ctx)
+    test("skips tool_use blocks", "tool_use" not in ctx and "Bash" not in ctx)
+    test("skips tool_result blocks", "tool_result" not in ctx)
+    test("skips progress entries", "hook_progress" not in ctx)
+    test("includes final assistant text", "[assistant] Done fixing" in ctx)
+
+    # Test max_lines truncation
+    ctx_short = context_reset.extract_session_context(fake_project, max_lines=1)
+    test("max_lines=1 returns only last line", ctx_short.count("\n") == 0 and "Done fixing" in ctx_short)
+    context_reset.get_project_logs_dir = orig_fn2
 
 # --- get_first_todo ---
 print("\n=== get_first_todo ===")
