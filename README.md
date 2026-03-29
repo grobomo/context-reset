@@ -4,10 +4,12 @@ Autonomous context reset for [Claude Code](https://docs.anthropic.com/en/docs/cl
 
 ## How it works
 
-1. Opens a new terminal tab/window with `claude` pointed at your project
-2. Waits for the new Claude process to start (process count check)
-3. Verifies the new session is working (transcript file activity)
-4. Kills the old tab's shell process tree
+1. Extracts session context from the current JSONL transcript (last 200 meaningful lines)
+2. Writes `SESSION_STATE.md` with the transcript tail so the new session knows what was happening
+3. Opens a new terminal tab/window with `claude` pointed at your project
+4. Waits for the new Claude process to start (process count check)
+5. Verifies the new session is working (transcript file activity)
+6. Kills the old tab's shell process tree
 
 If any step fails, the old tab is preserved. Nothing is lost.
 
@@ -66,6 +68,15 @@ The script reads `$CLAUDE_PROJECT_DIR` by default, so from a hook you can simply
 python C:/path/to/context-reset/context_reset.py
 ```
 
+## Session continuity
+
+Context resets use two layers to preserve continuity:
+
+- **SESSION_STATE.md** (automated): The script scrapes the last 200 meaningful lines from the current session's JSONL transcript — assistant text and user messages only (tool calls, hook feedback, and other noise are filtered out). Written to the project dir before launching the new tab. Auto-added to `.gitignore`.
+- **TODO.md** (manual): The stop hook tells Claude to update TODO.md with curated task status before resetting.
+
+The new session reads `SESSION_STATE.md` first (what actually happened), then `TODO.md` (what to do next).
+
 ## Safety
 
 - **Two-phase verification**: Won't kill the old tab until the new Claude is confirmed working
@@ -97,6 +108,7 @@ python scripts/test.py
 
 ```
 context_reset.py          # Main script
-scripts/test.py           # Test suite
+scripts/test.py           # Test suite (41 tests)
 ~/.claude/context-reset/  # Runtime data (logs, color map)
+SESSION_STATE.md          # Auto-generated in target project (gitignored)
 ```
