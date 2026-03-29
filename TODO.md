@@ -1,20 +1,28 @@
 # context-reset
 
-## Status: Core script built. Needs testing.
+Python wrapper that lets Claude Code reset its own context and continue working.
 
-## How it works
-1. Claude saves state to TODO.md
-2. Claude runs: `python context_reset.py --project-dir <dir>`
-3. Script spawns new Claude in a new terminal window with fresh context
-4. Script kills current Claude process
-5. New Claude reads TODO.md and continues working
+## Problem
+Claude can't run /compact or /clear programmatically. Context fills up, performance degrades, and the stop hook tells Claude to keep working but it can't clear its own context.
+
+## Solution
+A wrapper script Claude can call via Bash that:
+1. Writes current state to TODO.md (Claude does this before calling the wrapper)
+2. Kills the current Claude Code process
+3. Starts a new Claude session with `claude -p --continue "Read TODO.md and continue"`
+4. New session has fresh context but picks up the task list
+
+## Research
+- `claude -p` / `--print`: headless mode, non-interactive
+- `--continue`: continues most recent conversation
+- `--resume <session_id>`: continues specific conversation
+- `--output-format json|text|stream-json`: output control
+- CLAUDE.md is read at start of every conversation (persistent context)
 
 ## Tasks
-- [ ] Test: dry-run to verify PID detection works
-- [ ] Test: actual reset (save TODO, run script, verify new window opens)
-- [ ] Test on Windows (cmd /c start) and Git Bash
-
-## Completed
-- [x] Research: found Continuous-Claude-v3, ralph, boucle approaches
-- [x] Built context_reset.py (kill current, spawn fresh in new terminal)
-- [x] Wired into hook-runner stop module instructions
+- [ ] Build `context_reset.py` — the wrapper script
+- [ ] Handle graceful shutdown of current Claude process
+- [ ] Pass project directory so new session starts in right place
+- [ ] Test: Claude calls wrapper, new session reads TODO.md, continues
+- [ ] Add as a Bash-callable tool in stop hook instructions
+- [ ] Consider: should this be an MCP tool via mcp-manager instead?

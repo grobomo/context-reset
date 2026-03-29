@@ -1,87 +1,97 @@
 #!/usr/bin/env python3
 """
-context-reset: Reset Claude context, continue in same terminal tab.
+context-reset: Let Claude Code reset its own context and continue working.
 
-Called by Claude when context gets heavy:
-    python context_reset.py --project-dir /path/to/project
+Usage (from Claude Code via Bash):
+    python context_reset.py [--project-dir /path/to/project] [--prompt "custom resume prompt"]
 
 Flow:
-1. Copies resume command to clipboard
-2. Kills current Claude process
-3. Tab returns to shell prompt
-4. User pastes (Ctrl+V Enter) to resume in same tab
+1. Claude writes state to TODO.md before calling this
+2. This script spawns a NEW claude session in the same project dir
+3. New session reads TODO.md and continues working
+4. This script exits (and the old Claude process should be dying anyway since it ran this)
 """
 
 import argparse
 import subprocess
 import os
 import sys
-import signal
+import time
 
 
-def copy_to_clipboard(text):
-    """Copy text to OS clipboard."""
-    if sys.platform == "win32":
-        subprocess.run(['clip'], input=text.encode(), check=True)
-    elif sys.platform == "darwin":
-        subprocess.run(['pbcopy'], input=text.encode(), check=True)
-    else:
-        subprocess.run(['xclip', '-selection', 'clipboard'], input=text.encode(), check=True)
+def find_project_dir():
+    """Find project dir from env or cwd."""
+    return os.environ.get("CLAUDE_PROJECT_DIR", os.getcwd())
 
 
-def find_claude_pid():
-    """Walk up process tree to find Claude."""
-    pid = os.getpid()
-    if sys.platform == "win32":
-        for _ in range(10):
-            try:
-                out = subprocess.check_output(
-                    f'wmic process where ProcessId={pid} get ParentProcessId /value',
-                    encoding='utf-8', timeout=3
-                ).strip()
-                for line in out.split('\n'):
-                    if 'ParentProcessId' in line:
-                        pid = int(line.split('=')[1].strip())
-                        break
-                name_out = subprocess.check_output(
-                    f'wmic process where ProcessId={pid} get CommandLine /value',
-                    encoding='utf-8', timeout=3
-                ).strip()
-                if 'claude' in name_out.lower():
-                    return pid
-            except Exception:
-                break
-    return os.getppid()
+def build_resume_prompt(project_dir):
+    """Build the prompt that tells the new Claude session what to do."""
+    todo_path = os.path.join(project_dir, "TODO.md")
+    if os.path.exists(todo_path):
+        return (
+            "Context was reset to free up space. "
+            "Read TODO.md for current task state and continue working. "
+            "Do not ask what to do — just pick up where the previous session left off."
+        )
+    return (
+        "Context was reset to free up space. "
+        "Check for TODO.md, CLAUDE.md, or recent git log to understand current state. "
+        "Continue working on whatever was in progress."
+    )
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Reset Claude context")
-    parser.add_argument("--project-dir", default=os.environ.get("CLAUDE_PROJECT_DIR", os.getcwd()))
-    parser.add_argument("--prompt", default="Read TODO.md and continue working. Do not ask what to do.")
-    parser.add_argument("--dry-run", action="store_true")
+    parser = argparse.ArgumentParser(description="Reset Claude Code context and continue")
+    parser.add_argument("--project-dir", default=None, help="Project directory (default: CLAUDE_PROJECT_DIR or cwd)")
+    parser.add_argument("--prompt", default=None, help="Custom resume prompt")
+    parser.add_argument("--continue-session", action="store_true", help="Use --continue to resume last conversation")
+    parser.add_argument("--session-id", default=None, help="Resume specific session ID")
+    parser.add_argument("--dry-run", action="store_true", help="Print command without executing")
     args = parser.parse_args()
 
-    # Build the resume command
-    cmd = f'cd "{args.project_dir}" && claude "{args.prompt}"'
+    project_dir = args.project_dir or find_project_dir()
+    prompt = args.prompt or build_resume_prompt(project_dir)
+
+    # Build claude command
+    cmd = ["claude", "-p", prompt]
+
+    if args.session_id:
+        cmd.extend(["--resume", args.session_id])
+    elif args.continue_session:
+        cmd.append("--continue")
+
+    cmd.extend(["--allowedTools", "Edit,Write,Read,Glob,Grep,Bash,Skill"])
 
     if args.dry_run:
-        print(f"Would copy to clipboard: {cmd}")
-        print(f"Would kill PID: {find_claude_pid()}")
+        print(f"Would run in {project_dir}:")
+        print(f"  {' '.join(cmd)}")
         return
 
-    # Copy resume command to clipboard
-    copy_to_clipboard(cmd)
+    print(f"[context-reset] Starting new Claude session in {project_dir}")
+    print(f"[context-reset] Prompt: {prompt[:100]}...")
 
-    claude_pid = find_claude_pid()
-    print(f"\n[context-reset] Resume command copied to clipboard.")
-    print(f"[context-reset] After Claude exits, paste (Ctrl+V) and press Enter.")
-    print(f"[context-reset] Killing Claude (PID {claude_pid})...\n")
+    # Small delay to let the old process finish writing
+    time.sleep(1)
 
-    # Kill current Claude
+    # Spawn new claude process detached from current
     if sys.platform == "win32":
-        os.system(f'taskkill /F /T /PID {claude_pid}')
+        # Windows: use START to detach
+        subprocess.Popen(
+            ["cmd", "/c", "start", "/b"] + cmd,
+            cwd=project_dir,
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS,
+        )
     else:
-        os.kill(claude_pid, signal.SIGTERM)
+        # Unix: nohup + setsid
+        subprocess.Popen(
+            cmd,
+            cwd=project_dir,
+            start_new_session=True,
+            stdout=open(os.devnull, "w"),
+            stderr=open(os.devnull, "w"),
+        )
+
+    print("[context-reset] New session launched. This process will exit.")
 
 
 if __name__ == "__main__":
