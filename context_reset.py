@@ -355,23 +355,43 @@ def _load_process_table():
     """Load full process table as {pid: (parent_pid, name)} dict. One subprocess call."""
     table = {}
     if IS_WIN:
+        # Try wmic first (faster, more reliable on loaded systems)
         try:
+            import csv, io
             out = subprocess.check_output(
-                ['powershell', '-NoProfile', '-Command',
-                 'Get-CimInstance Win32_Process | '
-                 'ForEach-Object { "$($_.ProcessId)|$($_.ParentProcessId)|$($_.Name)" }'],
-                encoding='utf-8', timeout=10, startupinfo=_si(),
+                ['wmic', 'process', 'get', 'ProcessId,ParentProcessId,Name', '/format:csv'],
+                encoding='utf-8', timeout=15, startupinfo=_si(),
                 stderr=subprocess.DEVNULL
             )
-            for line in out.strip().splitlines():
-                parts = line.strip().split('|', 2)
-                if len(parts) == 3:
+            reader = csv.reader(io.StringIO(out.strip()))
+            for row in reader:
+                if len(row) >= 4 and row[1] != 'Name':
                     try:
-                        table[int(parts[0])] = (int(parts[1]), parts[2].lower())
+                        name, ppid, pid = row[1], int(row[2]), int(row[3])
+                        table[pid] = (ppid, name.lower())
                     except ValueError:
                         pass
         except Exception:
             pass
+        # Fallback to PowerShell if wmic failed
+        if not table:
+            try:
+                out = subprocess.check_output(
+                    ['powershell', '-NoProfile', '-Command',
+                     'Get-CimInstance Win32_Process | '
+                     'ForEach-Object { "$($_.ProcessId)|$($_.ParentProcessId)|$($_.Name)" }'],
+                    encoding='utf-8', timeout=30, startupinfo=_si(),
+                    stderr=subprocess.DEVNULL
+                )
+                for line in out.strip().splitlines():
+                    parts = line.strip().split('|', 2)
+                    if len(parts) == 3:
+                        try:
+                            table[int(parts[0])] = (int(parts[1]), parts[2].lower())
+                        except ValueError:
+                            pass
+            except Exception:
+                pass
     else:
         try:
             out = subprocess.check_output(
@@ -451,9 +471,46 @@ def _find_shell_pid_windows():
                 break
 
     if tab_shell is None:
-        log("  could not identify tab shell in process chain:")
+        log("  could not identify tab shell via direct parent check, chain:")
         for cpid, name in chain:
             log(f"    PID {cpid}: {name}")
+
+        # Fallback: find any shell in the chain that has a terminal host
+        # as ANY ancestor (not just immediate parent). Handles chains like:
+        # bash → bash → bash → claude.exe → powershell.exe → WindowsTerminal.exe
+        log("  trying fallback: scan chain for shell with terminal host ancestor")
+        for i, (cpid, name) in enumerate(chain):
+            if name in shell_names:
+                for j in range(i + 1, len(chain)):
+                    if chain[j][1] in terminal_hosts:
+                        tab_shell = cpid
+                        log(f"  fallback found: PID {cpid} ({name}), terminal ancestor {chain[j]}")
+                        break
+                if tab_shell:
+                    break
+
+    if tab_shell is None:
+        # Last resort: walk from os.getpid() through process table to find
+        # the shell→terminal_host pair (handles background process reparenting)
+        log("  trying last-resort: process table ancestor walk")
+        if _process_table:
+            test_pid = os.getpid()
+            ancestors = []
+            for _ in range(25):
+                entry = _process_table.get(test_pid)
+                if not entry:
+                    break
+                ancestors.append((test_pid, entry[1]))
+                test_pid = entry[0]
+            for i, (cpid, name) in enumerate(ancestors):
+                if name in shell_names and i + 1 < len(ancestors):
+                    if ancestors[i + 1][1] in terminal_hosts:
+                        tab_shell = cpid
+                        log(f"  last-resort found: PID {cpid} ({name}), parent {ancestors[i + 1]}")
+                        break
+
+    if tab_shell is None:
+        log("  all methods failed to find tab shell PID")
         return None
 
     # Safety: verify this shell doesn't own multiple Claude processes
