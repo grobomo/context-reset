@@ -70,19 +70,43 @@ def find_shell_pid():
     return None
 
 
+def get_recent_mtime(project_dir):
+    """Get the most recent file modification time in project dir (non-recursive, top-level only)."""
+    latest = 0
+    try:
+        for f in os.listdir(project_dir):
+            fp = os.path.join(project_dir, f)
+            if os.path.isfile(fp):
+                mt = os.path.getmtime(fp)
+                if mt > latest:
+                    latest = mt
+    except Exception:
+        pass
+    return latest
+
+
+def verify_claude_working(project_dir, timeout=30):
+    """Wait for evidence that new Claude is actively working (file modifications)."""
+    baseline = get_recent_mtime(project_dir)
+    print(f"[context-reset] Verifying new Claude is working (watching {project_dir})...")
+    for i in range(timeout):
+        time.sleep(1)
+        current = get_recent_mtime(project_dir)
+        if current > baseline:
+            return True
+    return False
+
+
 def main():
     parser = argparse.ArgumentParser(description="Autonomous Claude context reset")
     parser.add_argument("--project-dir", default=os.environ.get("CLAUDE_PROJECT_DIR", os.getcwd()))
     parser.add_argument("--prompt", default=None)
-    parser.add_argument("--close-old-tab", action="store_true", default=True,
-                        help="Close the old tab after new Claude starts (default: true)")
     parser.add_argument("--no-close", action="store_true", help="Don't close old tab")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
     project_dir = os.path.abspath(args.project_dir)
     prompt = args.prompt or build_prompt(project_dir)
-    close_old = args.close_old_tab and not args.no_close
 
     if sys.platform == "win32":
         escaped = prompt.replace('"', '`"')
@@ -92,7 +116,7 @@ def main():
 
     if args.dry_run:
         print(f"Command: {cmd}")
-        print(f"Close old tab: {close_old}")
+        print(f"Close old tab: {not args.no_close}")
         shell_pid = find_shell_pid()
         print(f"Shell PID to kill: {shell_pid}")
         return
@@ -104,23 +128,35 @@ def main():
     subprocess.Popen(cmd, shell=True)
     print(f"[context-reset] New Claude tab launched in {project_dir}")
 
-    if close_old and sys.platform == "win32":
-        # Wait for new claude process to appear (up to 15s)
-        print("[context-reset] Waiting for new Claude to start...")
+    if args.no_close:
+        return
+
+    if sys.platform == "win32":
+        # Phase 1: Wait for new claude process to appear (up to 15s)
+        print("[context-reset] Phase 1: Waiting for new Claude process...")
+        process_detected = False
         for i in range(15):
             time.sleep(1)
             after = count_claude_processes()
             if after > before:
                 print(f"[context-reset] New Claude detected ({after} processes, was {before})")
-                # Give it a moment to initialize
-                time.sleep(2)
-                # Kill the old tab's shell
-                shell_pid = find_shell_pid()
-                if shell_pid:
-                    print(f"[context-reset] Closing old tab (shell PID {shell_pid})")
-                    os.system(f'taskkill /F /T /PID {shell_pid}')
-                return
-        print("[context-reset] Warning: new Claude not detected, keeping old tab open")
+                process_detected = True
+                break
+
+        if not process_detected:
+            print("[context-reset] WARNING: new Claude not detected, keeping old tab open")
+            return
+
+        # Phase 2: Wait for evidence Claude is working (file modifications, up to 30s)
+        working = verify_claude_working(project_dir, timeout=30)
+        if working:
+            print("[context-reset] New Claude is actively working (files modified)")
+            shell_pid = find_shell_pid()
+            if shell_pid:
+                print(f"[context-reset] Closing old tab (shell PID {shell_pid})")
+                os.system(f'taskkill /F /T /PID {shell_pid}')
+        else:
+            print("[context-reset] WARNING: new Claude not modifying files yet, keeping old tab open")
 
 
 if __name__ == "__main__":
