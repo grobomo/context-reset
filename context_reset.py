@@ -70,30 +70,49 @@ def find_shell_pid():
     return None
 
 
-def get_recent_mtime(project_dir):
-    """Get the most recent file modification time in project dir (non-recursive, top-level only)."""
-    latest = 0
-    try:
-        for f in os.listdir(project_dir):
-            fp = os.path.join(project_dir, f)
-            if os.path.isfile(fp):
-                mt = os.path.getmtime(fp)
-                if mt > latest:
-                    latest = mt
-    except Exception:
-        pass
-    return latest
+def get_project_logs_dir(project_dir):
+    """Get the ~/.claude/projects/ folder for this project dir."""
+    home = os.path.expanduser("~")
+    # Claude uses path with dashes: C--Users-joelg-Documents-...
+    slug = os.path.abspath(project_dir).replace("\\", "-").replace("/", "-").replace(":", "-")
+    # Remove leading dash
+    if slug.startswith("-"):
+        slug = slug[1:]
+    return os.path.join(home, ".claude", "projects", slug)
 
 
-def verify_claude_working(project_dir, timeout=30):
-    """Wait for evidence that new Claude is actively working (file modifications)."""
-    baseline = get_recent_mtime(project_dir)
-    print(f"[context-reset] Verifying new Claude is working (watching {project_dir})...")
+def get_newest_jsonl(logs_dir):
+    """Get the newest .jsonl file and its size."""
+    if not os.path.exists(logs_dir):
+        return None, 0
+    jsonls = [f for f in os.listdir(logs_dir) if f.endswith(".jsonl")]
+    if not jsonls:
+        return None, 0
+    newest = max(jsonls, key=lambda f: os.path.getmtime(os.path.join(logs_dir, f)))
+    fp = os.path.join(logs_dir, newest)
+    return fp, os.path.getsize(fp)
+
+
+def verify_claude_working(project_dir, timeout=45):
+    """Wait for evidence new Claude is working by watching jsonl transcript growth."""
+    logs_dir = get_project_logs_dir(project_dir)
+    baseline_file, baseline_size = get_newest_jsonl(logs_dir)
+    print(f"[context-reset] Watching transcript logs in {logs_dir}...")
+
     for i in range(timeout):
         time.sleep(1)
-        current = get_recent_mtime(project_dir)
-        if current > baseline:
+        current_file, current_size = get_newest_jsonl(logs_dir)
+
+        # New jsonl file appeared (new session)
+        if current_file and current_file != baseline_file:
+            print(f"[context-reset] New session transcript detected: {os.path.basename(current_file)}")
             return True
+
+        # Existing file grew (Claude is reading/writing)
+        if current_file and current_size > baseline_size:
+            print(f"[context-reset] Transcript growing ({current_size - baseline_size} bytes)")
+            return True
+
     return False
 
 
