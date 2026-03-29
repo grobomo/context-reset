@@ -166,10 +166,10 @@ def main():
             print("[context-reset] WARNING: new Claude not detected, keeping old tab open")
             return
 
-        # Phase 2: Wait for evidence Claude is working (file modifications, up to 30s)
-        working = verify_claude_working(project_dir, timeout=30)
+        # Phase 2: Wait for evidence Claude is working (transcript activity, up to 45s)
+        working = verify_claude_working(project_dir, timeout=45)
         if working:
-            print("[context-reset] New Claude is actively working (files modified)")
+            print("[context-reset] New Claude is actively working")
             shell_pid = find_shell_pid()
             if shell_pid:
                 print(f"[context-reset] Closing old tab (shell PID {shell_pid})")
