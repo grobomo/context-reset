@@ -31,6 +31,6 @@ The prompt tells the new session to read SESSION_STATE.md (transcript context) a
 ## Testing
 
 ```bash
-python scripts/test.py    # 36 tests
+python scripts/test.py    # 41 tests
 python context_reset.py --project-dir . --dry-run   # verify command without executing
 ```

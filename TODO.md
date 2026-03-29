@@ -31,3 +31,14 @@
 - [x] Add CLAUDE.md for project-level context (what it does, how it integrates)
 - [x] Batch-query process tree in one PowerShell call instead of per-PID (reduces reset latency)
 - [x] Remove --suppressApplicationTitle to preserve Claude's green activity icon in WT tabs
+
+## Session State Handoff
+
+- [x] Extract transcript context from JSONL logs (last 200 meaningful lines)
+- [x] Write SESSION_STATE.md with transcript tail before launching new tab
+- [x] Filter noise: stop hook feedback, skill boilerplate, request interrupts, tool results
+- [x] Aggregate streaming user input chars into single messages
+- [x] Auto-add SESSION_STATE.md to target project's .gitignore
+- [x] Update build_prompt to tell new session to read SESSION_STATE.md first
+- [x] Replace em-dash with ASCII in prompt (PowerShell encoding safety)
+- [x] Tests for extraction, filtering, and state writing (41 total)

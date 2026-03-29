@@ -85,6 +85,24 @@ with tempfile.TemporaryDirectory() as d:
     # Test max_lines truncation
     ctx_short = context_reset.extract_session_context(fake_project, max_lines=1)
     test("max_lines=1 returns only last line", ctx_short.count("\n") == 0 and "Done fixing" in ctx_short)
+
+    # Test noise filtering
+    noise_entries = [
+        {"message": {"role": "user", "content": [{"type": "text", "text": "real user message"}]}},
+        {"message": {"role": "user", "content": [{"type": "text", "text": "Stop hook feedback:\nDO NOT STOP..."}]}},
+        {"message": {"role": "user", "content": [{"type": "text", "text": "Base directory for this skill: ~/.claude/skills/foo\n# Skill docs..."}]}},
+        {"message": {"role": "user", "content": [{"type": "text", "text": "[Request interrupted by user]"}]}},
+        {"message": {"role": "assistant", "content": [{"type": "text", "text": "final answer"}]}},
+    ]
+    with open(os.path.join(fake_logs, "session.jsonl"), "w") as f:
+        for e in noise_entries:
+            f.write(_json.dumps(e) + "\n")
+    ctx_filtered = context_reset.extract_session_context(fake_project)
+    test("filters stop hook feedback", "Stop hook feedback" not in ctx_filtered)
+    test("filters skill boilerplate", "Base directory for this skill" not in ctx_filtered)
+    test("filters request interrupted", "[Request interrupted" not in ctx_filtered)
+    test("keeps real user messages", "real user message" in ctx_filtered)
+    test("keeps assistant messages through filter", "final answer" in ctx_filtered)
     context_reset.get_project_logs_dir = orig_fn2
 
 # --- get_first_todo ---
