@@ -1,28 +1,20 @@
 # context-reset
 
-Python wrapper that lets Claude Code reset its own context and continue working.
+## Status: Core script done. Uses `wt new-tab` for same-window new tab.
 
-## Problem
-Claude can't run /compact or /clear programmatically. Context fills up, performance degrades, and the stop hook tells Claude to keep working but it can't clear its own context.
+## How it works
+1. Claude saves state to TODO.md
+2. Claude runs: `python context_reset.py --project-dir <dir>`
+3. Script opens new Windows Terminal tab with fresh Claude in same window
+4. New Claude reads TODO.md and continues autonomously
 
-## Solution
-A wrapper script Claude can call via Bash that:
-1. Writes current state to TODO.md (Claude does this before calling the wrapper)
-2. Kills the current Claude Code process
-3. Starts a new Claude session with `claude -p --continue "Read TODO.md and continue"`
-4. New session has fresh context but picks up the task list
+## Limitation
+- No WT API to query/target existing tabs (MS feature request #19818 open)
+- New tab appears at end, not replacing current tab
+- OSC 9;9 escape sequences can set tab titles but can't target tabs
 
-## Research
-- `claude -p` / `--print`: headless mode, non-interactive
-- `--continue`: continues most recent conversation
-- `--resume <session_id>`: continues specific conversation
-- `--output-format json|text|stream-json`: output control
-- CLAUDE.md is read at start of every conversation (persistent context)
-
-## Tasks
-- [ ] Build `context_reset.py` — the wrapper script
-- [ ] Handle graceful shutdown of current Claude process
-- [ ] Pass project directory so new session starts in right place
-- [ ] Test: Claude calls wrapper, new session reads TODO.md, continues
-- [ ] Add as a Bash-callable tool in stop hook instructions
-- [ ] Consider: should this be an MCP tool via mcp-manager instead?
+## Completed
+- [x] Built context_reset.py (wt new-tab approach)
+- [x] Dry-run tested
+- [x] Wired into hook-runner stop module instructions
+- [x] Research: WT tab API doesn't exist yet

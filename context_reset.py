@@ -1,97 +1,54 @@
 #!/usr/bin/env python3
 """
-context-reset: Let Claude Code reset its own context and continue working.
+context-reset: Autonomous Claude context reset.
 
-Usage (from Claude Code via Bash):
-    python context_reset.py [--project-dir /path/to/project] [--prompt "custom resume prompt"]
+Called by Claude when context gets heavy:
+    python context_reset.py --project-dir /path/to/project
 
-Flow:
-1. Claude writes state to TODO.md before calling this
-2. This script spawns a NEW claude session in the same project dir
-3. New session reads TODO.md and continues working
-4. This script exits (and the old Claude process should be dying anyway since it ran this)
+Opens a new Windows Terminal tab in the same window with fresh Claude.
+No human interaction needed. Tab ordering shifts but stays in same window.
 """
 
 import argparse
 import subprocess
 import os
 import sys
-import time
 
 
-def find_project_dir():
-    """Find project dir from env or cwd."""
-    return os.environ.get("CLAUDE_PROJECT_DIR", os.getcwd())
-
-
-def build_resume_prompt(project_dir):
-    """Build the prompt that tells the new Claude session what to do."""
-    todo_path = os.path.join(project_dir, "TODO.md")
-    if os.path.exists(todo_path):
+def build_prompt(project_dir):
+    todo = os.path.join(project_dir, "TODO.md")
+    if os.path.exists(todo):
         return (
-            "Context was reset to free up space. "
-            "Read TODO.md for current task state and continue working. "
-            "Do not ask what to do — just pick up where the previous session left off."
+            "Context was reset. Read TODO.md and continue working. "
+            "Do not ask what to do. Pick up where the last session left off."
         )
     return (
-        "Context was reset to free up space. "
-        "Check for TODO.md, CLAUDE.md, or recent git log to understand current state. "
-        "Continue working on whatever was in progress."
+        "Context was reset. Check TODO.md, CLAUDE.md, or git log for state. "
+        "Continue working."
     )
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Reset Claude Code context and continue")
-    parser.add_argument("--project-dir", default=None, help="Project directory (default: CLAUDE_PROJECT_DIR or cwd)")
-    parser.add_argument("--prompt", default=None, help="Custom resume prompt")
-    parser.add_argument("--continue-session", action="store_true", help="Use --continue to resume last conversation")
-    parser.add_argument("--session-id", default=None, help="Resume specific session ID")
-    parser.add_argument("--dry-run", action="store_true", help="Print command without executing")
+    parser = argparse.ArgumentParser(description="Autonomous Claude context reset")
+    parser.add_argument("--project-dir", default=os.environ.get("CLAUDE_PROJECT_DIR", os.getcwd()))
+    parser.add_argument("--prompt", default=None)
+    parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
-    project_dir = args.project_dir or find_project_dir()
-    prompt = args.prompt or build_resume_prompt(project_dir)
+    project_dir = os.path.abspath(args.project_dir)
+    prompt = args.prompt or build_prompt(project_dir)
 
-    # Build claude command
-    cmd = ["claude", "-p", prompt]
-
-    if args.session_id:
-        cmd.extend(["--resume", args.session_id])
-    elif args.continue_session:
-        cmd.append("--continue")
-
-    cmd.extend(["--allowedTools", "Edit,Write,Read,Glob,Grep,Bash,Skill"])
+    if sys.platform == "win32":
+        cmd = f'wt new-tab --startingDirectory "{project_dir}" cmd /k claude "{prompt}"'
+    else:
+        cmd = f'bash -c \'cd "{project_dir}" && claude "{prompt}"\''
 
     if args.dry_run:
-        print(f"Would run in {project_dir}:")
-        print(f"  {' '.join(cmd)}")
+        print(f"Command: {cmd}")
         return
 
-    print(f"[context-reset] Starting new Claude session in {project_dir}")
-    print(f"[context-reset] Prompt: {prompt[:100]}...")
-
-    # Small delay to let the old process finish writing
-    time.sleep(1)
-
-    # Spawn new claude process detached from current
-    if sys.platform == "win32":
-        # Windows: use START to detach
-        subprocess.Popen(
-            ["cmd", "/c", "start", "/b"] + cmd,
-            cwd=project_dir,
-            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS,
-        )
-    else:
-        # Unix: nohup + setsid
-        subprocess.Popen(
-            cmd,
-            cwd=project_dir,
-            start_new_session=True,
-            stdout=open(os.devnull, "w"),
-            stderr=open(os.devnull, "w"),
-        )
-
-    print("[context-reset] New session launched. This process will exit.")
+    subprocess.Popen(cmd, shell=True)
+    print(f"[context-reset] New Claude tab launched in {project_dir}")
 
 
 if __name__ == "__main__":
