@@ -39,7 +39,8 @@ def main():
     prompt = args.prompt or build_prompt(project_dir)
 
     if sys.platform == "win32":
-        cmd = f'wt new-tab --startingDirectory "{project_dir}" cmd /k claude "{prompt}"'
+        escaped = prompt.replace('"', '`"')
+        cmd = f'wt new-tab --startingDirectory "{project_dir}" powershell -NoExit -Command "claude \'{escaped}\'"'
     else:
         cmd = f'bash -c \'cd "{project_dir}" && claude "{prompt}"\''
 
