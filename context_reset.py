@@ -605,6 +605,30 @@ def build_launch_cmd(project_dir, prompt, tab_title, tab_color):
             return f"bash -c 'cd \"{project_dir}\" && claude '\"'\"'{escaped}'\"'\"'' &"
 
 
+def _save_foreground_window():
+    """Save the current foreground window handle (Windows only). Returns handle or None."""
+    if not IS_WIN:
+        return None
+    try:
+        import ctypes
+        return ctypes.windll.user32.GetForegroundWindow()
+    except Exception:
+        return None
+
+
+def _restore_foreground_window(hwnd, delay=0.5):
+    """Restore focus to a saved window handle after a delay (Windows only)."""
+    if not IS_WIN or not hwnd:
+        return
+    try:
+        time.sleep(delay)
+        import ctypes
+        ctypes.windll.user32.SetForegroundWindow(hwnd)
+        log("Restored focus to original window")
+    except Exception as e:
+        log(f"WARNING: could not restore focus: {e}")
+
+
 def _has_command(name):
     """Check if a command exists on PATH."""
     try:
@@ -767,7 +791,9 @@ def main():
     before = count_claude_processes()
     log(f"Phase 1: launching new tab ({before} Claude processes before)")
 
+    saved_hwnd = _save_foreground_window()
     subprocess.Popen(cmd, shell=True)
+    _restore_foreground_window(saved_hwnd)
     log(f"New tab opened in {project_name}")
 
     if args.no_close:
