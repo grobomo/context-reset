@@ -42,6 +42,21 @@ def log(msg):
         pass
 
 
+def cleanup_old_logs(keep_days=7):
+    """Delete audit logs older than keep_days."""
+    try:
+        if not os.path.exists(LOG_DIR):
+            return
+        cutoff = time.time() - (keep_days * 86400)
+        for f in os.listdir(LOG_DIR):
+            if f.endswith(".log"):
+                fp = os.path.join(LOG_DIR, f)
+                if os.path.getmtime(fp) < cutoff:
+                    os.remove(fp)
+    except Exception:
+        pass
+
+
 # ============ Helpers ============
 
 def build_prompt(project_dir):
@@ -245,6 +260,8 @@ def main():
     parser.add_argument("--timeout", type=int, default=45, help="Phase 2 verification timeout in seconds")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
+
+    cleanup_old_logs()
 
     project_dir = os.path.abspath(args.project_dir)
     prompt = args.prompt or build_prompt(project_dir)
