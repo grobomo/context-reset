@@ -91,6 +91,87 @@ print("\n=== count_claude_processes ===")
 count = context_reset.count_claude_processes()
 test("returns integer", isinstance(count, int))
 
+# --- verify_claude_working ---
+print("\n=== verify_claude_working ===")
+with tempfile.TemporaryDirectory() as d:
+    # Mock: create a fake project logs dir with matching slug
+    fake_project = os.path.join(d, "fake-project")
+    os.makedirs(fake_project)
+    logs_slug = os.path.abspath(fake_project).replace("\\", "-").replace("/", "-").replace(":", "-")
+    if logs_slug.startswith("-"):
+        logs_slug = logs_slug[1:]
+    fake_logs = os.path.join(d, "dotclaude", "projects", logs_slug)
+    os.makedirs(fake_logs)
+
+    # Patch get_project_logs_dir to return our fake dir
+    orig_fn = context_reset.get_project_logs_dir
+    context_reset.get_project_logs_dir = lambda proj: fake_logs
+
+    # Write baseline file
+    baseline = os.path.join(fake_logs, "session-old.jsonl")
+    with open(baseline, "w") as fh:
+        fh.write('{"type":"init"}\n')
+
+    # Simulate: new file appears after 1s (use a thread)
+    import threading
+    def write_new_file():
+        time.sleep(1)
+        with open(os.path.join(fake_logs, "session-new.jsonl"), "w") as fh:
+            fh.write('{"type":"init"}\n{"type":"assistant"}\n')
+    t = threading.Thread(target=write_new_file)
+    t.start()
+    result = context_reset.verify_claude_working(fake_project, timeout=5)
+    t.join()
+    test("detects new transcript file", result is True)
+
+    # Simulate: no new activity within timeout
+    result2 = context_reset.verify_claude_working(fake_project, timeout=2)
+    test("times out when no new activity", result2 is False)
+
+    # Simulate: existing file grows
+    existing = os.path.join(fake_logs, "session-grow.jsonl")
+    # Remove old files so this is the newest
+    for f in os.listdir(fake_logs):
+        os.remove(os.path.join(fake_logs, f))
+    with open(existing, "w") as fh:
+        fh.write('{"type":"init"}\n')
+    time.sleep(0.05)
+
+    def grow_file():
+        time.sleep(1)
+        with open(existing, "a") as fh:
+            fh.write('{"type":"assistant","message":"hello"}\n')
+    t2 = threading.Thread(target=grow_file)
+    t2.start()
+    result3 = context_reset.verify_claude_working(fake_project, timeout=5)
+    t2.join()
+    test("detects transcript growth", result3 is True)
+
+    context_reset.get_project_logs_dir = orig_fn
+
+# --- build_launch_cmd ---
+print("\n=== build_launch_cmd ===")
+with tempfile.TemporaryDirectory() as d:
+    cmd = context_reset.build_launch_cmd(d, "test prompt", "my title", "#2D5F2D")
+    if context_reset.IS_WIN:
+        test("contains wt new-tab", "wt new-tab" in cmd)
+        test("contains tab title", "my title" in cmd)
+        test("contains tab color", "#2D5F2D" in cmd)
+        test("contains project dir", d in cmd)
+        test("contains prompt", "test prompt" in cmd)
+        # Test single-quote escaping in prompt
+        cmd2 = context_reset.build_launch_cmd(d, "it's a test", "title", "#000000")
+        test("escapes single quotes for PowerShell", "it''s a test" in cmd2)
+        # Test title sanitization (quotes stripped)
+        cmd3 = context_reset.build_launch_cmd(d, "p", 'title "with" quotes', "#000000")
+        test("strips quotes from title", '"with"' not in cmd3 and "title with quotes" in cmd3)
+    elif context_reset.IS_MAC:
+        test("contains osascript", "osascript" in cmd)
+        test("contains prompt", "test prompt" in cmd)
+    else:
+        test("contains claude command", "claude" in cmd)
+        test("contains prompt", "test prompt" in cmd)
+
 # --- dry-run ---
 print("\n=== dry-run mode ===")
 with tempfile.TemporaryDirectory() as d:

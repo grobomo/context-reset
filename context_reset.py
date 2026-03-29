@@ -233,39 +233,59 @@ def count_claude_processes():
             return -1
 
 
-def get_process_parent_and_name(pid):
-    """Return (parent_pid, process_name) for a given PID, or (None, None)."""
+def _load_process_table():
+    """Load full process table as {pid: (parent_pid, name)} dict. One subprocess call."""
+    table = {}
     if IS_WIN:
         try:
             out = subprocess.check_output(
-                f'wmic process where ProcessId={pid} get ParentProcessId,Name /value',
-                encoding='utf-8', timeout=3, startupinfo=_si(),
+                ['powershell', '-NoProfile', '-Command',
+                 'Get-CimInstance Win32_Process | '
+                 'ForEach-Object { "$($_.ProcessId)|$($_.ParentProcessId)|$($_.Name)" }'],
+                encoding='utf-8', timeout=10, startupinfo=_si(),
                 stderr=subprocess.DEVNULL
-            ).strip()
-            parts = {}
-            for line in out.split('\n'):
-                line = line.strip()
-                if '=' in line:
-                    k, v = line.split('=', 1)
-                    parts[k] = v
-            return int(parts.get('ParentProcessId', '0')), parts.get('Name', '').lower()
+            )
+            for line in out.strip().splitlines():
+                parts = line.strip().split('|', 2)
+                if len(parts) == 3:
+                    try:
+                        table[int(parts[0])] = (int(parts[1]), parts[2].lower())
+                    except ValueError:
+                        pass
         except Exception:
-            return None, None
+            pass
     else:
         try:
             out = subprocess.check_output(
-                ['ps', '-o', 'ppid=,comm=', '-p', str(pid)],
-                encoding='utf-8', timeout=3,
+                ['ps', '-eo', 'pid=,ppid=,comm='],
+                encoding='utf-8', timeout=5,
                 stderr=subprocess.DEVNULL
-            ).strip()
-            if not out:
-                return None, None
-            parts = out.split(None, 1)
-            ppid = int(parts[0])
-            name = os.path.basename(parts[1]).lower() if len(parts) > 1 else ''
-            return ppid, name
+            )
+            for line in out.strip().splitlines():
+                parts = line.split(None, 2)
+                if len(parts) >= 3:
+                    try:
+                        table[int(parts[0])] = (int(parts[1]), os.path.basename(parts[2]).lower())
+                    except ValueError:
+                        pass
         except Exception:
-            return None, None
+            pass
+    return table
+
+
+# Module-level cache, populated on first use
+_process_table = None
+
+
+def get_process_parent_and_name(pid):
+    """Return (parent_pid, process_name) for a given PID, or (None, None)."""
+    global _process_table
+    if _process_table is None:
+        _process_table = _load_process_table()
+    entry = _process_table.get(pid)
+    if entry:
+        return entry
+    return None, None
 
 
 def find_shell_pid():
@@ -279,6 +299,8 @@ def find_shell_pid():
 
     Safety: verifies the shell doesn't own multiple Claude processes.
     """
+    global _process_table
+    _process_table = None  # Force fresh snapshot
     if IS_WIN:
         return _find_shell_pid_windows()
     else:
@@ -317,18 +339,13 @@ def _find_shell_pid_windows():
         return None
 
     # Safety: verify this shell doesn't own multiple Claude processes
-    try:
-        tree_out = subprocess.check_output(
-            f'wmic process where (ParentProcessId={tab_shell}) get Name /value',
-            encoding='utf-8', timeout=5, startupinfo=_si(),
-            stderr=subprocess.DEVNULL
-        ).lower()
-        claude_children = tree_out.count('claude')
-        if claude_children > 1:
-            log(f"SAFETY: shell PID {tab_shell} owns {claude_children} Claude processes - NOT killing")
-            return None
-    except Exception:
-        pass
+    claude_children = sum(
+        1 for (ppid, name) in _process_table.values()
+        if ppid == tab_shell and 'claude' in name
+    )
+    if claude_children > 1:
+        log(f"SAFETY: shell PID {tab_shell} owns {claude_children} Claude processes - NOT killing")
+        return None
 
     return tab_shell
 
@@ -369,20 +386,13 @@ def _find_shell_pid_unix():
         return None
 
     # Safety: verify this shell doesn't own multiple Claude processes
-    try:
-        out = subprocess.check_output(
-            ['pgrep', '-P', str(tab_shell), '-x', 'claude'],
-            encoding='utf-8', timeout=5,
-            stderr=subprocess.DEVNULL
-        )
-        claude_children = len(out.strip().splitlines())
-        if claude_children > 1:
-            log(f"SAFETY: shell PID {tab_shell} owns {claude_children} Claude processes - NOT killing")
-            return None
-    except subprocess.CalledProcessError:
-        pass
-    except Exception:
-        pass
+    claude_children = sum(
+        1 for (ppid, name) in _process_table.values()
+        if ppid == tab_shell and name == 'claude'
+    )
+    if claude_children > 1:
+        log(f"SAFETY: shell PID {tab_shell} owns {claude_children} Claude processes - NOT killing")
+        return None
 
     return tab_shell
 
@@ -397,7 +407,7 @@ def build_launch_cmd(project_dir, prompt, tab_title, tab_color):
         # Also sanitize tab title (could contain quotes from TODO.md)
         safe_title = tab_title.replace('"', '').replace("'", "")
         return (
-            f'wt new-tab --title "{safe_title}" --suppressApplicationTitle '
+            f'wt new-tab --title "{safe_title}" '
             f'--tabColor "{tab_color}" '
             f'--startingDirectory "{project_dir}" '
             f"powershell -NoExit -Command \"claude '{ps_escaped}'\""

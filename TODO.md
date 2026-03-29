@@ -22,3 +22,12 @@
 - [x] Pushed to grobomo/context-reset (public)
 - [x] Linux/macOS support (process mgmt, tab launch, kill via SIGTERM)
 - [x] Fix: build_prompt now tells new session to treat all `- [ ]` items as active tasks
+
+## Hardening & Polish
+
+- [x] Replace deprecated `wmic` calls with `tasklist`/PowerShell `Get-CimInstance` for process tree queries
+- [x] Add tests for `build_launch_cmd` (pure function, easy to test on all platforms)
+- [x] Add tests for `verify_claude_working` with mock transcript files
+- [x] Add CLAUDE.md for project-level context (what it does, how it integrates)
+- [x] Batch-query process tree in one PowerShell call instead of per-PID (reduces reset latency)
+- [x] Remove --suppressApplicationTitle to preserve Claude's green activity icon in WT tabs
