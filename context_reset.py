@@ -217,9 +217,17 @@ def main():
             shell_pid = find_shell_pid()
             if shell_pid:
                 log(f"Closing old tab (shell PID {shell_pid})")
-                os.system(f'taskkill /F /T /PID {shell_pid}')
-                log("Old tab closed")
                 log("=== Context reset complete ===")
+                # Launch taskkill detached, then exit immediately.
+                # taskkill /T kills the whole tree (shell → claude → python).
+                # If we don't exit first, taskkill fails on our own PID and
+                # the surviving python process keeps the terminal tab open.
+                subprocess.Popen(
+                    f'taskkill /F /T /PID {shell_pid}',
+                    shell=True,
+                    creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW,
+                )
+                sys.exit(0)
             else:
                 log("WARNING: could not find shell PID, keeping old tab open")
                 log("=== Context reset PARTIAL (new tab working, old tab kept) ===")
