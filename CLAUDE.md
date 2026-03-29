@@ -18,7 +18,7 @@ Called by hook-runner's `auto-continue.js` stop module:
 python C:/Users/joelg/Documents/ProjectsCL1/context-reset/context_reset.py --project-dir $CLAUDE_PROJECT_DIR
 ```
 
-The prompt tells the new session to read TODO.md and continue working.
+The prompt tells the new session to read SESSION_STATE.md (transcript context) and TODO.md.
 
 ## Key Design Decisions
 
@@ -26,10 +26,11 @@ The prompt tells the new session to read TODO.md and continue working.
 - **Detached kill on Windows**: `taskkill /T` would kill us too, so the kill runs in a detached Python subprocess.
 - **Tab colors**: Persistent per-project colors from a 10-color earth-tone palette, stored in `~/.claude/context-reset/color-map.json`.
 - **Safety**: Won't kill a shell that owns multiple Claude processes.
+- **Session state handoff**: Before launching the new tab, scrapes the current session's JSONL transcript (last 200 meaningful lines), filters noise (tool results, hook feedback, skill boilerplate), and writes `SESSION_STATE.md` in the project dir. The new session reads this first for full context continuity.
 
 ## Testing
 
 ```bash
-python scripts/test.py    # 27 tests
+python scripts/test.py    # 36 tests
 python context_reset.py --project-dir . --dry-run   # verify command without executing
 ```
