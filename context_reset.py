@@ -67,47 +67,69 @@ def count_claude_processes():
         return -1
 
 
+def get_process_parent_and_name(pid):
+    """Return (parent_pid, process_name) for a given PID, or (None, None)."""
+    try:
+        out = subprocess.check_output(
+            f'wmic process where ProcessId={pid} get ParentProcessId /value',
+            encoding='utf-8', timeout=3
+        ).strip()
+        parent_pid = None
+        for line in out.split('\n'):
+            if 'ParentProcessId' in line:
+                parent_pid = int(line.split('=')[1].strip())
+                break
+        name_out = subprocess.check_output(
+            f'wmic process where ProcessId={pid} get Name /value',
+            encoding='utf-8', timeout=3
+        ).strip()
+        name = name_out.split('=')[-1].strip().lower()
+        return parent_pid, name
+    except Exception:
+        return None, None
+
+
 def find_shell_pid():
-    """Find the shell process that owns THIS terminal tab only.
+    """Find the OUTERMOST shell process that owns this terminal tab.
+
+    Walks the full parent chain and returns the highest shell PID
+    (the tab's shell, not an inner shell like Claude's Bash tool).
 
     Safety: verifies the shell doesn't own multiple Claude processes.
     """
-    pid = os.getpid()
     if sys.platform != "win32":
         return os.getppid()
 
     shell_names = ('bash.exe', 'powershell.exe', 'pwsh.exe', 'cmd.exe')
-    for _ in range(15):
-        try:
-            out = subprocess.check_output(
-                f'wmic process where ProcessId={pid} get ParentProcessId /value',
-                encoding='utf-8', timeout=3
-            ).strip()
-            for line in out.split('\n'):
-                if 'ParentProcessId' in line:
-                    pid = int(line.split('=')[1].strip())
-                    break
-            name_out = subprocess.check_output(
-                f'wmic process where ProcessId={pid} get Name /value',
-                encoding='utf-8', timeout=3
-            ).strip()
-            name = name_out.split('=')[-1].strip().lower()
-            if name in shell_names:
-                try:
-                    tree_out = subprocess.check_output(
-                        f'wmic process where (ParentProcessId={pid}) get Name /value',
-                        encoding='utf-8', timeout=5
-                    ).lower()
-                    claude_children = tree_out.count('claude')
-                    if claude_children > 1:
-                        log(f"SAFETY: shell PID {pid} owns {claude_children} Claude processes - NOT killing")
-                        return None
-                except Exception:
-                    pass
-                return pid
-        except Exception:
+    pid = os.getpid()
+    outermost_shell = None
+
+    for _ in range(20):
+        parent_pid, name = get_process_parent_and_name(pid)
+        if parent_pid is None:
             break
-    return None
+        pid = parent_pid
+        if name in shell_names:
+            outermost_shell = pid
+            log(f"  found shell: PID {pid} ({name})")
+
+    if outermost_shell is None:
+        return None
+
+    # Safety: verify this shell doesn't own multiple Claude processes
+    try:
+        tree_out = subprocess.check_output(
+            f'wmic process where (ParentProcessId={outermost_shell}) get Name /value',
+            encoding='utf-8', timeout=5
+        ).lower()
+        claude_children = tree_out.count('claude')
+        if claude_children > 1:
+            log(f"SAFETY: shell PID {outermost_shell} owns {claude_children} Claude processes - NOT killing")
+            return None
+    except Exception:
+        pass
+
+    return outermost_shell
 
 
 def get_project_logs_dir(project_dir):
