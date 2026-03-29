@@ -57,6 +57,63 @@ def cleanup_old_logs(keep_days=7):
         pass
 
 
+# ============ Tab Colors ============
+
+# Distinct, high-contrast colors for tab identification
+TAB_COLORS = [
+    "#E06C75",  # red
+    "#61AFEF",  # blue
+    "#98C379",  # green
+    "#E5C07B",  # yellow
+    "#C678DD",  # purple
+    "#56B6C2",  # cyan
+    "#D19A66",  # orange
+    "#BE5046",  # dark red
+    "#7EC8E3",  # light blue
+    "#C3E88D",  # lime
+]
+
+COLOR_MAP_FILE = os.path.join(LOG_DIR, "color-map.json")
+
+
+def get_tab_color(project_dir):
+    """Return a persistent hex color for this project, rotating through the palette."""
+    project_key = os.path.abspath(project_dir)
+    color_map = {}
+    try:
+        if os.path.exists(COLOR_MAP_FILE):
+            with open(COLOR_MAP_FILE, 'r', encoding='utf-8') as f:
+                color_map = json.load(f)
+    except Exception:
+        pass
+
+    # Prune entries for directories that no longer exist
+    color_map = {k: v for k, v in color_map.items() if os.path.isdir(k)}
+
+    # Already assigned
+    if project_key in color_map:
+        return color_map[project_key]
+
+    # Find first unused color
+    used = set(color_map.values())
+    for color in TAB_COLORS:
+        if color not in used:
+            color_map[project_key] = color
+            break
+    else:
+        # All colors used — cycle based on count
+        color_map[project_key] = TAB_COLORS[len(color_map) % len(TAB_COLORS)]
+
+    try:
+        os.makedirs(LOG_DIR, exist_ok=True)
+        with open(COLOR_MAP_FILE, 'w', encoding='utf-8') as f:
+            json.dump(color_map, f, indent=2)
+    except Exception:
+        pass
+
+    return color_map[project_key]
+
+
 # ============ Helpers ============
 
 def get_first_todo(project_dir):
@@ -296,12 +353,15 @@ def main():
     # Tab title: first unchecked TODO item, or project name as fallback
     first_todo = get_first_todo(project_dir)
     tab_title = first_todo or project_name
+    tab_color = get_tab_color(project_dir)
+    log(f"Tab: title='{tab_title}', color={tab_color}")
 
     if sys.platform == "win32":
         escaped = prompt.replace('"', '`"')
         # --suppressApplicationTitle prevents the shell from overwriting our title
         cmd = (
             f'wt new-tab --title "{tab_title}" --suppressApplicationTitle '
+            f"--tabColor '{tab_color}' "
             f'--startingDirectory "{project_dir}" '
             f'powershell -NoExit -Command "claude \'{escaped}\'"'
         )

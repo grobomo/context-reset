@@ -47,6 +47,23 @@ with tempfile.TemporaryDirectory() as d:
     result = context_reset.get_first_todo(d)
     test("long item truncated to 50", result is not None and len(result) <= 50 and result.endswith("..."))
 
+# --- get_tab_color ---
+print("\n=== get_tab_color ===")
+with tempfile.TemporaryDirectory() as d:
+    # Temporarily override color map file to avoid polluting real one
+    orig = context_reset.COLOR_MAP_FILE
+    context_reset.COLOR_MAP_FILE = os.path.join(d, "color-map.json")
+    pa = os.path.join(d, "project-a")
+    pb = os.path.join(d, "project-b")
+    os.makedirs(pa); os.makedirs(pb)
+    c1 = context_reset.get_tab_color(pa)
+    test("returns hex color", c1.startswith("#") and len(c1) == 7)
+    c2 = context_reset.get_tab_color(pb)
+    test("different projects get different colors", c1 != c2)
+    c1_again = context_reset.get_tab_color(pa)
+    test("same project gets same color", c1 == c1_again)
+    context_reset.COLOR_MAP_FILE = orig
+
 # --- get_project_logs_dir ---
 print("\n=== get_project_logs_dir ===")
 logs_dir = context_reset.get_project_logs_dir("C:/Users/test/project")
