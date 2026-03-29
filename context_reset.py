@@ -59,18 +59,18 @@ def cleanup_old_logs(keep_days=7):
 
 # ============ Tab Colors ============
 
-# Distinct, high-contrast colors for tab identification
+# Dark earth tones — distinct but easy on the eyes
 TAB_COLORS = [
-    "#E06C75",  # red
-    "#61AFEF",  # blue
-    "#98C379",  # green
-    "#E5C07B",  # yellow
-    "#C678DD",  # purple
-    "#56B6C2",  # cyan
-    "#D19A66",  # orange
-    "#BE5046",  # dark red
-    "#7EC8E3",  # light blue
-    "#C3E88D",  # lime
+    "#2D5F2D",  # forest green
+    "#1B3A5C",  # navy blue
+    "#6B4226",  # brown
+    "#4A4A4A",  # charcoal gray
+    "#5B3A6B",  # plum
+    "#2E4A4A",  # dark teal
+    "#7A5C3A",  # tan/khaki
+    "#3D2B1F",  # espresso
+    "#4A6741",  # olive
+    "#4B3621",  # dark brown
 ]
 
 COLOR_MAP_FILE = os.path.join(LOG_DIR, "color-map.json")
@@ -361,7 +361,7 @@ def main():
         # --suppressApplicationTitle prevents the shell from overwriting our title
         cmd = (
             f'wt new-tab --title "{tab_title}" --suppressApplicationTitle '
-            f"--tabColor '{tab_color}' "
+            f'--tabColor "{tab_color}" '
             f'--startingDirectory "{project_dir}" '
             f'powershell -NoExit -Command "claude \'{escaped}\'"'
         )
