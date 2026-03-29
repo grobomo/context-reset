@@ -56,11 +56,21 @@ def build_prompt(project_dir):
     )
 
 
+def _si():
+    """Return STARTUPINFO that hides console windows on Windows."""
+    if sys.platform == "win32":
+        si = subprocess.STARTUPINFO()
+        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        si.wShowWindow = 0  # SW_HIDE
+        return si
+    return None
+
+
 def count_claude_processes():
     try:
         out = subprocess.check_output(
             'tasklist /FI "IMAGENAME eq claude.exe" /NH',
-            encoding='utf-8', timeout=5
+            encoding='utf-8', timeout=5, startupinfo=_si()
         )
         return out.count('claude.exe')
     except Exception:
@@ -71,29 +81,25 @@ def get_process_parent_and_name(pid):
     """Return (parent_pid, process_name) for a given PID, or (None, None)."""
     try:
         out = subprocess.check_output(
-            f'wmic process where ProcessId={pid} get ParentProcessId /value',
-            encoding='utf-8', timeout=3
+            f'wmic process where ProcessId={pid} get ParentProcessId,Name /value',
+            encoding='utf-8', timeout=3, startupinfo=_si()
         ).strip()
-        parent_pid = None
+        parts = {}
         for line in out.split('\n'):
-            if 'ParentProcessId' in line:
-                parent_pid = int(line.split('=')[1].strip())
-                break
-        name_out = subprocess.check_output(
-            f'wmic process where ProcessId={pid} get Name /value',
-            encoding='utf-8', timeout=3
-        ).strip()
-        name = name_out.split('=')[-1].strip().lower()
-        return parent_pid, name
+            line = line.strip()
+            if '=' in line:
+                k, v = line.split('=', 1)
+                parts[k] = v
+        return int(parts.get('ParentProcessId', '0')), parts.get('Name', '').lower()
     except Exception:
         return None, None
 
 
 def find_shell_pid():
-    """Find the OUTERMOST shell process that owns this terminal tab.
+    """Find the terminal tab's shell — the shell whose parent is a terminal host.
 
-    Walks the full parent chain and returns the highest shell PID
-    (the tab's shell, not an inner shell like Claude's Bash tool).
+    Process tree: WindowsTerminal → powershell/bash (TAB SHELL) → claude → ... → python
+    We want the TAB SHELL, not any inner shells from Claude's Bash tool.
 
     Safety: verifies the shell doesn't own multiple Claude processes.
     """
@@ -101,35 +107,48 @@ def find_shell_pid():
         return os.getppid()
 
     shell_names = ('bash.exe', 'powershell.exe', 'pwsh.exe', 'cmd.exe')
-    pid = os.getpid()
-    outermost_shell = None
+    terminal_hosts = ('windowsterminal.exe', 'conhost.exe', 'openconsole.exe')
 
+    # Walk up the full parent chain, collect (pid, name) pairs
+    pid = os.getpid()
+    chain = []
     for _ in range(20):
         parent_pid, name = get_process_parent_and_name(pid)
-        if parent_pid is None:
+        if parent_pid is None or parent_pid == 0:
             break
+        chain.append((parent_pid, name))
         pid = parent_pid
-        if name in shell_names:
-            outermost_shell = pid
-            log(f"  found shell: PID {pid} ({name})")
 
-    if outermost_shell is None:
+    # Find the shell whose parent is a terminal host
+    tab_shell = None
+    for i, (cpid, name) in enumerate(chain):
+        if name in shell_names and i + 1 < len(chain):
+            _, parent_name = chain[i + 1]
+            if parent_name in terminal_hosts:
+                tab_shell = cpid
+                log(f"  tab shell: PID {cpid} ({name}), parent is {parent_name}")
+                break
+
+    if tab_shell is None:
+        log("  could not identify tab shell in process chain:")
+        for cpid, name in chain:
+            log(f"    PID {cpid}: {name}")
         return None
 
     # Safety: verify this shell doesn't own multiple Claude processes
     try:
         tree_out = subprocess.check_output(
-            f'wmic process where (ParentProcessId={outermost_shell}) get Name /value',
-            encoding='utf-8', timeout=5
+            f'wmic process where (ParentProcessId={tab_shell}) get Name /value',
+            encoding='utf-8', timeout=5, startupinfo=_si()
         ).lower()
         claude_children = tree_out.count('claude')
         if claude_children > 1:
-            log(f"SAFETY: shell PID {outermost_shell} owns {claude_children} Claude processes - NOT killing")
+            log(f"SAFETY: shell PID {tab_shell} owns {claude_children} Claude processes - NOT killing")
             return None
     except Exception:
         pass
 
-    return outermost_shell
+    return tab_shell
 
 
 def get_project_logs_dir(project_dir):
