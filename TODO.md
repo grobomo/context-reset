@@ -14,7 +14,7 @@
 - [x] Fix: kill/restore runs as invisible Python subprocess (no cmd/ping windows)
 - [x] --timeout flag for configurable phase 2 timeout
 - [x] --close-tab flag to auto-close terminal tab after reset
-- [x] Tab title = first unchecked TODO item (--title + --suppressApplicationTitle)
+- [x] Tab title = first unchecked TODO item (--title flag)
 - [x] Per-project tab colors (10-color palette, persistent color-map.json, auto-prune)
 - [x] .gitignore, .github/publish.json, secret-scan.yml
 - [x] Test suite (scripts/test.py) — 17 tests, all passing
