@@ -18,8 +18,20 @@
 - [x] .gitignore, .github/publish.json, secret-scan.yml
 - [x] Test suite (scripts/test.py) — 10 tests, all passing
 
+## Tab close behavior
+
+By default, killing the shell exits with code 1. Windows Terminal's `closeOnExit: "graceful"`
+(default) keeps the tab open so you can review the conversation.
+
+Use `--close-tab` to auto-close: temporarily sets WT `closeOnExit=always`, kills the shell,
+then a detached process restores `closeOnExit=graceful` after ~3 seconds.
+
+To permanently change: edit Windows Terminal settings → Profiles → Defaults → set
+`"closeOnExit": "always"`. Revert to `"graceful"` to get the review-before-close behavior back.
+
 ## Needs live test
-- [ ] Verify tab actually closes with new shell PID detection (dry-run confirmed PID 34972 = powershell, child of WindowsTerminal)
+- [ ] Verify tab closes with --close-tab flag
+- [ ] Verify tab stays open (reviewable) without --close-tab
 
 ## Nice to have
 - [ ] Linux/macOS support (currently Windows-only)

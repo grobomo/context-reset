@@ -14,6 +14,7 @@ Audit log: ~/.claude/context-reset/YYYY-MM-DD.log (rotated daily)
 """
 
 import argparse
+import json
 import subprocess
 import os
 import sys
@@ -64,6 +65,41 @@ def _si():
         si.wShowWindow = 0  # SW_HIDE
         return si
     return None
+
+
+def get_wt_settings_path():
+    """Return the path to Windows Terminal's settings.json."""
+    return os.path.join(
+        os.environ.get("LOCALAPPDATA", ""),
+        "Packages", "Microsoft.WindowsTerminal_8wekyb3d8bbwe",
+        "LocalState", "settings.json"
+    )
+
+
+def set_wt_close_on_exit(mode):
+    """Set Windows Terminal's closeOnExit in profile defaults.
+
+    Modes: "graceful" (default) - only close on exit 0, tab stays open on error
+           "always"             - always close tab when process exits
+           "never"              - never auto-close
+    """
+    path = get_wt_settings_path()
+    if not os.path.exists(path):
+        log(f"WARNING: Windows Terminal settings not found at {path}")
+        return False
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            settings = json.load(f)
+        defaults = settings.setdefault("profiles", {}).setdefault("defaults", {})
+        old = defaults.get("closeOnExit", "graceful")
+        defaults["closeOnExit"] = mode
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(settings, f, indent=4, ensure_ascii=False)
+        log(f"Windows Terminal closeOnExit: {old} -> {mode}")
+        return True
+    except Exception as e:
+        log(f"WARNING: failed to update WT settings: {e}")
+        return False
 
 
 def count_claude_processes():
@@ -204,6 +240,8 @@ def main():
     parser.add_argument("--project-dir", default=os.environ.get("CLAUDE_PROJECT_DIR", os.getcwd()))
     parser.add_argument("--prompt", default=None)
     parser.add_argument("--no-close", action="store_true", help="Don't close old tab")
+    parser.add_argument("--close-tab", action="store_true",
+                        help="Auto-close terminal tab (sets WT closeOnExit=always temporarily)")
     parser.add_argument("--timeout", type=int, default=45, help="Phase 2 verification timeout in seconds")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
@@ -266,16 +304,38 @@ def main():
             shell_pid = find_shell_pid()
             if shell_pid:
                 log(f"Closing old tab (shell PID {shell_pid})")
+                # With --close-tab, temporarily set WT to auto-close tabs,
+                # then restore after the kill. Without it, WT shows
+                # "process exited" and lets you review the conversation.
+                wt_changed = False
+                if args.close_tab:
+                    wt_changed = set_wt_close_on_exit("always")
                 log("=== Context reset complete ===")
-                # Launch taskkill detached, then exit immediately.
+                # Launch kill+restore as a detached process, then exit.
                 # taskkill /T kills the whole tree (shell → claude → python).
-                # If we don't exit first, taskkill fails on our own PID and
-                # the surviving python process keeps the terminal tab open.
-                subprocess.Popen(
-                    f'taskkill /F /T /PID {shell_pid}',
-                    shell=True,
-                    creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW,
-                )
+                # We must exit first so taskkill doesn't fail on our own PID.
+                if wt_changed:
+                    # Kill shell, wait for WT to process it, restore setting
+                    restore_script = (
+                        f'taskkill /F /T /PID {shell_pid} >nul 2>&1 & '
+                        f'ping -n 3 127.0.0.1 >nul & '
+                        f'python -c "'
+                        f"from context_reset import set_wt_close_on_exit; "
+                        f"set_wt_close_on_exit(''graceful'')"
+                        f'"'
+                    )
+                    subprocess.Popen(
+                        restore_script,
+                        shell=True,
+                        cwd=os.path.dirname(os.path.abspath(__file__)),
+                        creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW,
+                    )
+                else:
+                    subprocess.Popen(
+                        f'taskkill /F /T /PID {shell_pid}',
+                        shell=True,
+                        creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW,
+                    )
                 sys.exit(0)
             else:
                 log("WARNING: could not find shell PID, keeping old tab open")
