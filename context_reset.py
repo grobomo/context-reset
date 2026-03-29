@@ -59,6 +59,27 @@ def cleanup_old_logs(keep_days=7):
 
 # ============ Helpers ============
 
+def get_first_todo(project_dir):
+    """Return the first unchecked TODO item text, or None."""
+    todo = os.path.join(project_dir, "TODO.md")
+    if not os.path.exists(todo):
+        return None
+    try:
+        with open(todo, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("- [ ]"):
+                    # Strip the checkbox and clean up
+                    text = line[5:].strip()
+                    # Truncate for tab title (WT shows ~40 chars well)
+                    if len(text) > 50:
+                        text = text[:47] + "..."
+                    return text
+    except Exception:
+        pass
+    return None
+
+
 def build_prompt(project_dir):
     todo = os.path.join(project_dir, "TODO.md")
     if os.path.exists(todo):
@@ -272,9 +293,18 @@ def main():
     log(f"Prompt: {prompt[:80]}...")
     log(f"Close old tab: {not args.no_close}")
 
+    # Tab title: first unchecked TODO item, or project name as fallback
+    first_todo = get_first_todo(project_dir)
+    tab_title = first_todo or project_name
+
     if sys.platform == "win32":
         escaped = prompt.replace('"', '`"')
-        cmd = f'wt new-tab --startingDirectory "{project_dir}" powershell -NoExit -Command "claude \'{escaped}\'"'
+        # --suppressApplicationTitle prevents the shell from overwriting our title
+        cmd = (
+            f'wt new-tab --title "{tab_title}" --suppressApplicationTitle '
+            f'--startingDirectory "{project_dir}" '
+            f'powershell -NoExit -Command "claude \'{escaped}\'"'
+        )
     else:
         cmd = f'bash -c \'cd "{project_dir}" && claude "{prompt}"\''
 

@@ -32,6 +32,21 @@ with tempfile.TemporaryDirectory() as d:
         f.write("# tasks\n")
     test("with TODO.md -> continue prompt", "continue working" in context_reset.build_prompt(d).lower())
 
+# --- get_first_todo ---
+print("\n=== get_first_todo ===")
+with tempfile.TemporaryDirectory() as d:
+    test("no TODO.md -> None", context_reset.get_first_todo(d) is None)
+    with open(os.path.join(d, "TODO.md"), "w") as f:
+        f.write("# tasks\n- [x] Done item\n- [ ] First open item\n- [ ] Second open\n")
+    test("finds first unchecked item", context_reset.get_first_todo(d) == "First open item")
+    with open(os.path.join(d, "TODO.md"), "w") as f:
+        f.write("# tasks\n- [x] All done\n")
+    test("all checked -> None", context_reset.get_first_todo(d) is None)
+    with open(os.path.join(d, "TODO.md"), "w") as f:
+        f.write("- [ ] " + "A" * 60 + "\n")
+    result = context_reset.get_first_todo(d)
+    test("long item truncated to 50", result is not None and len(result) <= 50 and result.endswith("..."))
+
 # --- get_project_logs_dir ---
 print("\n=== get_project_logs_dir ===")
 logs_dir = context_reset.get_project_logs_dir("C:/Users/test/project")
