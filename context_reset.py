@@ -43,11 +43,18 @@ def count_claude_processes():
 
 
 def find_shell_pid():
-    """Find the shell process (bash/powershell) that owns this terminal tab."""
+    """Find the shell process that owns THIS terminal tab only.
+
+    Walks up the process tree from our PID to find the first shell.
+    Safety: verifies the shell doesn't own multiple Claude processes
+    (which would mean it's a parent of multiple tabs, not just ours).
+    """
     pid = os.getpid()
     if sys.platform != "win32":
         return os.getppid()
-    # Walk up to find bash.exe or powershell.exe
+
+    shell_names = ('bash.exe', 'powershell.exe', 'pwsh.exe', 'cmd.exe')
+    # Walk up to find the shell
     for _ in range(15):
         try:
             out = subprocess.check_output(
@@ -63,7 +70,19 @@ def find_shell_pid():
                 encoding='utf-8', timeout=3
             ).strip()
             name = name_out.split('=')[-1].strip().lower()
-            if name in ('bash.exe', 'powershell.exe', 'pwsh.exe', 'cmd.exe'):
+            if name in shell_names:
+                # Safety: check this shell doesn't own multiple claude processes
+                try:
+                    tree_out = subprocess.check_output(
+                        f'wmic process where (ParentProcessId={pid}) get Name /value',
+                        encoding='utf-8', timeout=5
+                    ).lower()
+                    claude_children = tree_out.count('claude')
+                    if claude_children > 1:
+                        print(f"[context-reset] SAFETY: shell PID {pid} owns {claude_children} Claude processes — NOT killing")
+                        return None
+                except Exception:
+                    pass
                 return pid
         except Exception:
             break
