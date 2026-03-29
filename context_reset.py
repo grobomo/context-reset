@@ -314,28 +314,36 @@ def main():
                 # Launch kill+restore as a detached process, then exit.
                 # taskkill /T kills the whole tree (shell → claude → python).
                 # We must exit first so taskkill doesn't fail on our own PID.
+                # Build a single Python script that does everything invisibly:
+                # kill the shell tree, optionally wait and restore WT settings.
+                script_dir = os.path.dirname(os.path.abspath(__file__))
                 if wt_changed:
-                    # Kill shell, wait for WT to process it, restore setting
-                    restore_script = (
-                        f'taskkill /F /T /PID {shell_pid} >nul 2>&1 & '
-                        f'ping -n 3 127.0.0.1 >nul & '
-                        f'python -c "'
-                        f"from context_reset import set_wt_close_on_exit; "
-                        f"set_wt_close_on_exit(''graceful'')"
-                        f'"'
-                    )
-                    subprocess.Popen(
-                        restore_script,
-                        shell=True,
-                        cwd=os.path.dirname(os.path.abspath(__file__)),
-                        creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW,
+                    kill_script = (
+                        f'import subprocess, sys, time, os; '
+                        f'sys.path.insert(0, {repr(script_dir)}); '
+                        f'si = subprocess.STARTUPINFO(); '
+                        f'si.dwFlags |= subprocess.STARTF_USESHOWWINDOW; '
+                        f'si.wShowWindow = 0; '
+                        f'subprocess.call("taskkill /F /T /PID {shell_pid}", '
+                        f'startupinfo=si, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); '
+                        f'time.sleep(3); '
+                        f'from context_reset import set_wt_close_on_exit; '
+                        f'set_wt_close_on_exit("graceful")'
                     )
                 else:
-                    subprocess.Popen(
-                        f'taskkill /F /T /PID {shell_pid}',
-                        shell=True,
-                        creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW,
+                    kill_script = (
+                        f'import subprocess; '
+                        f'si = subprocess.STARTUPINFO(); '
+                        f'si.dwFlags |= subprocess.STARTF_USESHOWWINDOW; '
+                        f'si.wShowWindow = 0; '
+                        f'subprocess.call("taskkill /F /T /PID {shell_pid}", '
+                        f'startupinfo=si, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)'
                     )
+                subprocess.Popen(
+                    [sys.executable, '-c', kill_script],
+                    creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW,
+                    startupinfo=_si(),
+                )
                 sys.exit(0)
             else:
                 log("WARNING: could not find shell PID, keeping old tab open")

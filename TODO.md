@@ -1,6 +1,6 @@
 # context-reset
 
-## Status: Production-ready. Needs live test of tab-close fix.
+## Status: Production-ready. Live tested and verified.
 
 ## Completed
 - [x] Core script (wt new-tab, PowerShell)
@@ -29,10 +29,10 @@ then a detached process restores `closeOnExit=graceful` after ~3 seconds.
 To permanently change: edit Windows Terminal settings → Profiles → Defaults → set
 `"closeOnExit": "always"`. Revert to `"graceful"` to get the review-before-close behavior back.
 
-## PRIORITY: Check live test result
-- [ ] Did the old tab close? Check audit log: cat ~/.claude/context-reset/2026-03-29.log
-- [ ] If tab stayed open, check what went wrong and fix
-- [ ] Verify tab stays open (reviewable) without --close-tab
+## Live test results (2026-03-29) ✓
+- [x] Old tab closes with --close-tab (confirmed: multiple resets across projects)
+- [x] Tab stays open without --close-tab (default closeOnExit=graceful keeps it)
+- [x] New Claude detected in 3-6 seconds, transcript verified before old tab killed
 
 ## Nice to have
 - [ ] Linux/macOS support (currently Windows-only)
