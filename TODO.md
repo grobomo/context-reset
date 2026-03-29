@@ -1,6 +1,6 @@
 # context-reset
 
-## Status: Production-ready. Live tested, pushed to GitHub.
+## Status: Complete. All features implemented, tested, documented, pushed.
 
 ## Completed
 - [x] Core script (wt new-tab, PowerShell)
@@ -17,18 +17,12 @@
 - [x] Fix: kill/restore runs as invisible Python subprocess (no cmd/ping windows)
 - [x] --timeout flag for configurable phase 2 timeout
 - [x] --close-tab flag to auto-close terminal tab after reset
+- [x] Tab title = first unchecked TODO item (--title + --suppressApplicationTitle)
+- [x] Per-project tab colors (10-color palette, persistent color-map.json, auto-prune)
 - [x] .gitignore, .github/publish.json, secret-scan.yml
-- [x] Test suite (scripts/test.py) — 10 tests, all passing
+- [x] Test suite (scripts/test.py) — 17 tests, all passing
+- [x] README.md with usage, integration, and safety docs
 - [x] Pushed to grobomo/context-reset (public)
-
-## Tab close behavior
-
-By default, killing the shell exits with code 1. Windows Terminal's `closeOnExit: "graceful"`
-(default) keeps the tab open so you can review the conversation.
-
-Use `--close-tab` to auto-close: temporarily sets WT `closeOnExit=always`, kills the shell,
-then a detached process restores `closeOnExit=graceful` after ~3 seconds.
 
 ## Nice to have
 - [ ] Linux/macOS support (currently Windows-only)
-- [ ] README.md for GitHub (usage examples, integration guide)
