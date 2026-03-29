@@ -109,24 +109,28 @@ def find_shell_pid():
     shell_names = ('bash.exe', 'powershell.exe', 'pwsh.exe', 'cmd.exe')
     terminal_hosts = ('windowsterminal.exe', 'conhost.exe', 'openconsole.exe')
 
-    # Walk up the full parent chain, collect (pid, name) pairs
+    # Walk up the parent chain, collecting (pid, name) for each process
     pid = os.getpid()
-    chain = []
+    chain = []  # [(this_pid, this_name), (parent_pid, parent_name), ...]
     for _ in range(20):
-        parent_pid, name = get_process_parent_and_name(pid)
+        parent_pid, my_name = get_process_parent_and_name(pid)
         if parent_pid is None or parent_pid == 0:
             break
-        chain.append((parent_pid, name))
+        chain.append((pid, my_name))
         pid = parent_pid
+    # Append the topmost reachable process
+    _, top_name = get_process_parent_and_name(pid)
+    if top_name:
+        chain.append((pid, top_name))
 
-    # Find the shell whose parent is a terminal host
+    # Find the shell whose NEXT entry (parent) is a terminal host
     tab_shell = None
     for i, (cpid, name) in enumerate(chain):
         if name in shell_names and i + 1 < len(chain):
-            _, parent_name = chain[i + 1]
+            parent_pid, parent_name = chain[i + 1]
             if parent_name in terminal_hosts:
                 tab_shell = cpid
-                log(f"  tab shell: PID {cpid} ({name}), parent is {parent_name}")
+                log(f"  tab shell: PID {cpid} ({name}), parent PID {parent_pid} ({parent_name})")
                 break
 
     if tab_shell is None:
