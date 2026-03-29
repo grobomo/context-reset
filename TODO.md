@@ -29,8 +29,9 @@ then a detached process restores `closeOnExit=graceful` after ~3 seconds.
 To permanently change: edit Windows Terminal settings → Profiles → Defaults → set
 `"closeOnExit": "always"`. Revert to `"graceful"` to get the review-before-close behavior back.
 
-## Needs live test
-- [ ] Verify tab closes with --close-tab flag
+## PRIORITY: Check live test result
+- [ ] Did the old tab close? Check audit log: cat ~/.claude/context-reset/2026-03-29.log
+- [ ] If tab stayed open, check what went wrong and fix
 - [ ] Verify tab stays open (reviewable) without --close-tab
 
 ## Nice to have
