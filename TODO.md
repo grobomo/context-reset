@@ -45,4 +45,11 @@
 
 ## Noise Filtering
 
-- [ ] T001 Filter boilerplate prompts (context-reset prompt, session-start hook) from transcript tail
+- [x] T001 Fixed: raw JSONL tail from end of file instead of filtered/interpreted transcript (PR #2)
+
+## Hook Runner Scoping (done this session, lives in ~/.claude/hooks/)
+
+- [x] Shared load-modules.js for global + project-scoped module discovery
+- [x] All 4 runners updated (pretooluse, posttooluse, stop, sessionstart)
+- [x] use-workers.js scoped to hackathon26 only
+- [x] archive/ folder ignored by loader
