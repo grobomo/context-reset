@@ -1,33 +1,17 @@
 #!/usr/bin/env bash
-# Test that boilerplate prompts are filtered from transcript tail
+# Test that raw JSONL tail reads from end of file, not beginning
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 python -c "
 import json, tempfile, os, sys
 sys.path.insert(0, '.')
-from context_reset import extract_session_context, get_project_logs_dir, get_newest_jsonl
+from context_reset import extract_session_context, get_project_logs_dir
 
-# Create a fake JSONL transcript with boilerplate + real content
-lines = []
-
-# Boilerplate: context reset prompt (should be filtered)
-lines.append(json.dumps({'message': {'role': 'user', 'content': [{'type': 'text', 'text': 'Context was reset. Do not ask what to do. Pick up where the last session left off.'}]}}))
-
-# Boilerplate: session start hook (should be filtered)
-lines.append(json.dumps({'message': {'role': 'user', 'content': [{'type': 'text', 'text': 'SESSION START INSTRUCTIONS: Check TODO.md in \$CLAUDE_PROJECT_DIR for pending tasks.'}]}}))
-
-# Real content (should be kept)
-lines.append(json.dumps({'message': {'role': 'assistant', 'content': [{'type': 'text', 'text': 'Working on the CF template now.'}]}}))
-lines.append(json.dumps({'message': {'role': 'user', 'content': [{'type': 'text', 'text': 'Add the S3 bucket policy too.'}]}}))
-lines.append(json.dumps({'message': {'role': 'assistant', 'content': [{'type': 'text', 'text': 'Done, added the bucket policy.'}]}}))
-
-# Write to a temp project dir mimicking the logs structure
+# Create 500 JSONL entries, extract last 200, verify we get end not beginning
 with tempfile.TemporaryDirectory() as tmpdir:
-    # Create fake project
     proj = os.path.join(tmpdir, 'testproj')
     os.makedirs(proj)
 
-    # Compute logs dir the same way context_reset does
     slug = os.path.abspath(proj).replace(os.sep, '-').replace(':', '-')
     if slug.startswith('-'):
         slug = slug[1:]
@@ -37,26 +21,23 @@ with tempfile.TemporaryDirectory() as tmpdir:
 
     jsonl_path = os.path.join(logs_dir, 'test-session.jsonl')
     with open(jsonl_path, 'w') as f:
-        f.write('\n'.join(lines) + '\n')
+        for i in range(500):
+            f.write(json.dumps({'message': {'role': 'assistant', 'content': [{'type': 'text', 'text': f'msg-{i}'}]}}) + '\n')
 
-    # Extract context
-    result = extract_session_context(proj)
+    result = extract_session_context(proj, max_lines=200)
 
-    # Cleanup
     os.remove(jsonl_path)
     try:
         os.rmdir(logs_dir)
     except:
         pass
 
-    # Verify boilerplate is filtered
-    assert 'Context was reset' not in result, f'Context reset prompt leaked through: {result}'
-    assert 'SESSION START INSTRUCTIONS' not in result, f'Session start hook leaked through: {result}'
+    lines = [l for l in result.split('\n') if l.strip()]
+    assert len(lines) == 200, f'Expected 200 lines, got {len(lines)}'
+    assert 'msg-0' not in result, f'Beginning of file leaked into tail'
+    assert 'msg-299' not in result, f'Entry before tail window leaked in'
+    assert 'msg-300' in lines[0], f'Tail should start at msg-300, got: {lines[0][:80]}'
+    assert 'msg-499' in lines[-1], f'Tail should end at msg-499, got: {lines[-1][:80]}'
 
-    # Verify real content is kept
-    assert 'Working on the CF template' in result, f'Real assistant content missing: {result}'
-    assert 'Add the S3 bucket policy' in result, f'Real user content missing: {result}'
-    assert 'Done, added the bucket policy' in result, f'Real assistant content missing: {result}'
-
-    print('PASS: boilerplate filtered, real content preserved')
+    print('PASS: raw JSONL tail reads last 200 lines from end of file')
 "

@@ -144,81 +144,37 @@ def get_first_todo(project_dir):
 
 
 def extract_session_context(project_dir, max_lines=200):
-    """Extract the last N meaningful lines from the current session's JSONL transcript.
+    """Extract the last N raw JSONL lines from the current session's transcript.
 
-    Filters to assistant text and human messages (skips tool calls, tool results,
-    hook progress, and other noise). Returns a string summary.
+    Returns the raw JSON lines from the end of the file so the next session
+    gets full context including tool use, tool results, and everything else.
     """
     logs_dir = get_project_logs_dir(project_dir)
     jsonl_path, _ = get_newest_jsonl(logs_dir)
     if not jsonl_path:
         return ""
 
-    lines = []
     try:
         with open(jsonl_path, 'r', encoding='utf-8') as f:
-            for raw_line in f:
-                raw_line = raw_line.strip()
-                if not raw_line:
-                    continue
-                try:
-                    entry = json.loads(raw_line)
-                except json.JSONDecodeError:
-                    continue
-
-                # Skip non-message entries (progress, hooks, etc.)
-                msg = entry.get("message")
-                if not msg or not isinstance(msg, dict):
-                    continue
-                role = msg.get("role", "")
-                content = msg.get("content", [])
-
-                if role == "assistant":
-                    for block in content:
-                        if isinstance(block, dict) and block.get("type") == "text":
-                            text = block.get("text", "").strip()
-                            if text:
-                                lines.append(f"[assistant] {text}")
-                elif role == "user":
-                    # Aggregate all text from this user message into one line
-                    # Content may contain bare strings (streaming chars), text blocks,
-                    # and tool_result blocks (noise -- skip those)
-                    parts = []
-                    for block in content:
-                        if isinstance(block, str):
-                            parts.append(block)
-                        elif isinstance(block, dict):
-                            if block.get("type") == "text":
-                                text = block.get("text", "").strip()
-                                if text:
-                                    parts.append(text)
-                            # Skip tool_result blocks -- they're noise
-                    merged = "".join(parts).strip()
-                    if not merged:
-                        continue
-                    # Filter noise: stop hook feedback, skill boilerplate,
-                    # session start prompts, context reset prompts
-                    if merged.startswith("Stop hook feedback:"):
-                        continue
-                    if merged.startswith("Base directory for this skill:"):
-                        continue
-                    if merged.startswith("[Request interrupted"):
-                        continue
-                    if merged.startswith("Context was reset."):
-                        continue
-                    if "SESSION START INSTRUCTIONS:" in merged:
-                        continue
-                    lines.append(f"[user] {merged}")
+            all_lines = f.readlines()
     except Exception as e:
-        log(f"WARNING: failed to extract session context: {e}")
+        log(f"WARNING: failed to read transcript: {e}")
         return ""
 
-    if not lines:
+    # Take last max_lines non-empty lines from end of file
+    raw_tail = []
+    for line in reversed(all_lines):
+        line = line.rstrip()
+        if line:
+            raw_tail.append(line)
+            if len(raw_tail) >= max_lines:
+                break
+    raw_tail.reverse()
+
+    if not raw_tail:
         return ""
 
-    # Take the last max_lines
-    tail = lines[-max_lines:]
-    return "\n".join(tail)
+    return "\n".join(raw_tail)
 
 
 def _ensure_gitignored(project_dir, entry):
