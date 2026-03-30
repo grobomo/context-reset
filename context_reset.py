@@ -260,9 +260,8 @@ def _parse_and_render_tail(jsonl_lines, max_chars=32000):
                 if tuid:
                     tool_results[tuid] = text.strip()
 
-    # Second pass: build readable output
-    output = []
-    total_chars = 0
+    # Second pass: render all turns
+    all_turns = []
 
     for d in records:
         # Context compaction boundaries
@@ -270,8 +269,7 @@ def _parse_and_render_tail(jsonl_lines, max_chars=32000):
             meta = d.get('compactMetadata', {})
             tokens = meta.get('preTokens', 0)
             entry = f"\n{'=' * 50}\n  Context compacted ({tokens:,} tokens)\n{'=' * 50}\n"
-            output.append(entry)
-            total_chars += len(entry)
+            all_turns.append(entry)
             continue
 
         if d.get('type') not in ('user', 'assistant'):
@@ -359,18 +357,42 @@ def _parse_and_render_tail(jsonl_lines, max_chars=32000):
             continue
 
         turn_text = header + '\n' + '\n'.join(parts) + '\n'
+        all_turns.append(turn_text)
 
-        if total_chars + len(turn_text) > max_chars and output:
-            output.insert(0, "[... earlier conversation truncated to fit 8K token budget ...]\n")
-            break
-
-        output.append(turn_text)
-        total_chars += len(turn_text)
-
-    if not output:
+    if not all_turns:
         return ""
 
-    return '\n'.join(output)
+    # Smart truncation: if all turns fit, return them all.
+    # If not, keep first ~25% and last ~75% of budget, drop the middle.
+    total_chars = sum(len(t) for t in all_turns)
+    if total_chars <= max_chars:
+        return '\n'.join(all_turns)
+
+    head_budget = int(max_chars * 0.25)
+    tail_budget = max_chars - head_budget
+    separator = "\n[... middle of conversation truncated to fit 8K token budget ...]\n\n"
+    tail_budget -= len(separator)
+
+    # Collect head turns
+    head_turns = []
+    head_chars = 0
+    for t in all_turns:
+        if head_chars + len(t) > head_budget and head_turns:
+            break
+        head_turns.append(t)
+        head_chars += len(t)
+
+    # Collect tail turns (from end, working backwards)
+    tail_turns = []
+    tail_chars = 0
+    for t in reversed(all_turns):
+        if tail_chars + len(t) > tail_budget and tail_turns:
+            break
+        tail_turns.append(t)
+        tail_chars += len(t)
+    tail_turns.reverse()
+
+    return '\n'.join(head_turns) + separator + '\n'.join(tail_turns)
 
 
 def extract_session_context(project_dir, max_lines=500, max_chars=32000):

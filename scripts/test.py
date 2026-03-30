@@ -115,7 +115,7 @@ ctx_hook = context_reset._parse_and_render_tail(hook_entries)
 test("readable: shows hooks", "[Hook]" in ctx_hook and "Stop hook" in ctx_hook)
 test("readable: shows user text after hook", "continue please" in ctx_hook)
 
-# Test char budget cap
+# Test char budget cap with smart truncation (keeps first + last turns)
 big_entries = [
     _json.dumps({"type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "text": f"message number {i} with padding " + "x" * 200}]}})
     for i in range(500)
@@ -123,6 +123,10 @@ big_entries = [
 ctx_capped = context_reset._parse_and_render_tail(big_entries, max_chars=5000)
 test("char budget respected", len(ctx_capped) <= 6000)  # some overhead for truncation notice
 test("truncation notice present", "truncated" in ctx_capped)
+test("smart truncation: keeps first message", "message number 0" in ctx_capped)
+test("smart truncation: keeps last message", "message number 499" in ctx_capped)
+# Middle messages should be dropped
+test("smart truncation: drops middle", "message number 250" not in ctx_capped)
 
 # Test compact boundary
 boundary_entries = [

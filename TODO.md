@@ -66,3 +66,11 @@
 
 - [x] Read SESSION_STATE.md after next context reset and verify it's readable, useful, and within token budget
   - Result: 31K chars (~7.7K tokens), clean conversation format, fully readable in one shot
+
+## Code Cleanup (003)
+
+- [x] T007: Move csv, ctypes, io imports to top-level (PR #6)
+
+## Smart Truncation (004)
+
+- [x] T001: Keep first + last turns when truncating, drop the middle (most recent context is most valuable)
