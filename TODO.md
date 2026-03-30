@@ -42,3 +42,7 @@
 - [x] Update build_prompt to tell new session to read SESSION_STATE.md first
 - [x] Replace em-dash with ASCII in prompt (PowerShell encoding safety)
 - [x] Tests for extraction, filtering, and state writing (41 total)
+
+## Noise Filtering
+
+- [ ] T001 Filter boilerplate prompts (context-reset prompt, session-start hook) from transcript tail

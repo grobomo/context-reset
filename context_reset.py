@@ -196,12 +196,17 @@ def extract_session_context(project_dir, max_lines=200):
                     merged = "".join(parts).strip()
                     if not merged:
                         continue
-                    # Filter noise: stop hook feedback, skill boilerplate
+                    # Filter noise: stop hook feedback, skill boilerplate,
+                    # session start prompts, context reset prompts
                     if merged.startswith("Stop hook feedback:"):
                         continue
                     if merged.startswith("Base directory for this skill:"):
                         continue
                     if merged.startswith("[Request interrupted"):
+                        continue
+                    if merged.startswith("Context was reset."):
+                        continue
+                    if "SESSION START INSTRUCTIONS:" in merged:
                         continue
                     lines.append(f"[user] {merged}")
     except Exception as e:
