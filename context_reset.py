@@ -143,38 +143,254 @@ def get_first_todo(project_dir):
     return None
 
 
-def extract_session_context(project_dir, max_lines=200):
-    """Extract the last N raw JSONL lines from the current session's transcript.
+def _tail_lines(filepath, max_lines=500, chunk_size=65536):
+    """Read the last N lines from a file efficiently without loading the whole file.
 
-    Returns the raw JSON lines from the end of the file so the next session
-    gets full context including tool use, tool results, and everything else.
+    Reads backwards in chunks from the end of the file.
+    Returns list of line strings in forward order.
+    """
+    lines = []
+    try:
+        size = os.path.getsize(filepath)
+        if size == 0:
+            return []
+        with open(filepath, 'rb') as f:
+            remaining = b''
+            offset = size
+            while offset > 0 and len(lines) < max_lines:
+                read_size = min(chunk_size, offset)
+                offset -= read_size
+                f.seek(offset)
+                chunk = f.read(read_size) + remaining
+                parts = chunk.split(b'\n')
+                remaining = parts[0]
+                for part in reversed(parts[1:]):
+                    line = part.decode('utf-8', errors='replace').rstrip()
+                    if line:
+                        lines.append(line)
+                        if len(lines) >= max_lines:
+                            break
+            if remaining and len(lines) < max_lines:
+                line = remaining.decode('utf-8', errors='replace').rstrip()
+                if line:
+                    lines.append(line)
+    except Exception as e:
+        log(f"WARNING: _tail_lines failed: {e}")
+        return []
+    lines.reverse()
+    return lines
+
+
+def _tool_summary(name, inp):
+    """One-line summary of a tool use for session state."""
+    if name == 'Write':
+        return f"Write -> {inp.get('file_path', '?')}"
+    elif name == 'Read':
+        return f"Read -> {inp.get('file_path', '?')}"
+    elif name == 'Edit':
+        return f"Edit -> {inp.get('file_path', '?')}"
+    elif name == 'Bash':
+        cmd = inp.get('command', '')
+        if len(cmd) > 80:
+            cmd = cmd[:77] + '...'
+        return f"$ {cmd}"
+    elif name == 'Glob':
+        return f"Glob -> {inp.get('pattern', '?')}"
+    elif name == 'Grep':
+        return f"Grep -> {inp.get('pattern', '?')}"
+    elif name == 'WebSearch':
+        return f"WebSearch: {inp.get('query', '?')}"
+    elif name == 'WebFetch':
+        return f"WebFetch: {inp.get('url', '?')[:60]}"
+    elif name == 'Task':
+        desc = inp.get('description', inp.get('prompt', '?'))[:60]
+        return f"Task: {desc}"
+    elif name == 'Skill':
+        return f"Skill: {inp.get('skill', '?')}"
+    elif 'mcp__' in name:
+        parts = name.split('__')
+        server = parts[1] if len(parts) > 1 else '?'
+        tname = parts[2] if len(parts) > 2 else '?'
+        return f"MCP {server}/{tname}"
+    else:
+        return f"{name}()"
+
+
+def _parse_and_render_tail(jsonl_lines, max_chars=32000):
+    """Parse raw JSONL lines into readable conversation text.
+
+    Converts JSONL transcript entries into a clean, human-readable format
+    showing the conversation flow: user messages, assistant responses,
+    tool uses with summaries, hook firings, and context boundaries.
+
+    Returns string capped at max_chars (~8K tokens).
+    """
+    import re as _re
+
+    # First pass: collect tool results
+    tool_results = {}
+    records = []
+    for line in jsonl_lines:
+        try:
+            d = json.loads(line)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        records.append(d)
+        if d.get('type') != 'user':
+            continue
+        msg = d.get('message', {})
+        content = msg.get('content', [])
+        if isinstance(content, str):
+            continue
+        for block in content:
+            if isinstance(block, dict) and block.get('type') == 'tool_result':
+                tuid = block.get('tool_use_id', '')
+                rc = block.get('content', '')
+                if isinstance(rc, list):
+                    text = '\n'.join(
+                        x.get('text', '') for x in rc
+                        if isinstance(x, dict) and x.get('type') == 'text'
+                    )
+                elif isinstance(rc, str):
+                    text = rc
+                else:
+                    text = ''
+                if tuid:
+                    tool_results[tuid] = text.strip()
+
+    # Second pass: build readable output
+    output = []
+    total_chars = 0
+
+    for d in records:
+        # Context compaction boundaries
+        if d.get('type') == 'system' and d.get('subtype') == 'compact_boundary':
+            meta = d.get('compactMetadata', {})
+            tokens = meta.get('preTokens', 0)
+            entry = f"\n{'=' * 50}\n  Context compacted ({tokens:,} tokens)\n{'=' * 50}\n"
+            output.append(entry)
+            total_chars += len(entry)
+            continue
+
+        if d.get('type') not in ('user', 'assistant'):
+            continue
+
+        msg = d.get('message', {})
+        role = msg.get('role', d['type'])
+        content = msg.get('content', [])
+        ts = d.get('timestamp', '')
+
+        if isinstance(content, str):
+            content = [{"type": "text", "text": content}]
+
+        # Format timestamp
+        ts_short = ''
+        if ts:
+            try:
+                dt = datetime.fromisoformat(ts.replace('Z', '+00:00'))
+                ts_short = dt.strftime('%H:%M')
+            except Exception:
+                pass
+
+        parts = []
+        role_label = 'User' if role == 'user' else 'Claude'
+        header = f"--- {role_label}"
+        if ts_short:
+            header += f" [{ts_short}]"
+        header += " ---"
+
+        has_content = False
+
+        for block in content:
+            if not isinstance(block, dict):
+                continue
+            btype = block.get('type', '')
+
+            if btype == 'text':
+                text = block.get('text', '')
+                # Extract and show hooks compactly
+                if '<system-reminder>' in text and role == 'user':
+                    hooks = _re.findall(
+                        r'<system-reminder>(.*?)</system-reminder>',
+                        text, flags=_re.DOTALL
+                    )
+                    for h in hooks:
+                        h = h.strip()
+                        if h:
+                            h_short = h[:150].replace('\n', ' ')
+                            if len(h) > 150:
+                                h_short += '...'
+                            parts.append(f"  [Hook] {h_short}")
+                            has_content = True
+                    cleaned = _re.sub(
+                        r'<system-reminder>.*?</system-reminder>',
+                        '', text, flags=_re.DOTALL
+                    ).strip()
+                    if cleaned:
+                        if len(cleaned) > 1000:
+                            cleaned = cleaned[:1000] + '...'
+                        parts.append(cleaned)
+                        has_content = True
+                else:
+                    if text.strip():
+                        if len(text) > 1000:
+                            text = text[:1000] + '...'
+                        parts.append(text)
+                        has_content = True
+
+            elif btype == 'tool_use':
+                tuid = block.get('id', '')
+                name = block.get('name', '?')
+                inp = block.get('input', {})
+                summary = _tool_summary(name, inp)
+                result = tool_results.get(tuid, '')
+                if result:
+                    result_short = result[:200].replace('\n', ' ')
+                    if len(result) > 200:
+                        result_short += '...'
+                    parts.append(f"  [{summary}] -> {result_short}")
+                else:
+                    parts.append(f"  [{summary}]")
+                has_content = True
+
+        if not has_content:
+            continue
+
+        turn_text = header + '\n' + '\n'.join(parts) + '\n'
+
+        if total_chars + len(turn_text) > max_chars and output:
+            output.insert(0, "[... earlier conversation truncated to fit 8K token budget ...]\n")
+            break
+
+        output.append(turn_text)
+        total_chars += len(turn_text)
+
+    if not output:
+        return ""
+
+    return '\n'.join(output)
+
+
+def extract_session_context(project_dir, max_lines=500, max_chars=32000):
+    """Extract recent conversation from the current session's transcript.
+
+    Reads the last N JSONL lines efficiently (from end of file, no full load),
+    then parses them into clean readable text showing the conversation flow:
+    user messages, Claude responses, tool uses, hooks, and boundaries.
+
+    Output is capped at ~8K tokens (max_chars) so the next session can
+    read SESSION_STATE.md without hitting token limits.
     """
     logs_dir = get_project_logs_dir(project_dir)
     jsonl_path, _ = get_newest_jsonl(logs_dir)
     if not jsonl_path:
         return ""
 
-    try:
-        with open(jsonl_path, 'r', encoding='utf-8') as f:
-            all_lines = f.readlines()
-    except Exception as e:
-        log(f"WARNING: failed to read transcript: {e}")
+    lines = _tail_lines(jsonl_path, max_lines=max_lines)
+    if not lines:
         return ""
 
-    # Take last max_lines non-empty lines from end of file
-    raw_tail = []
-    for line in reversed(all_lines):
-        line = line.rstrip()
-        if line:
-            raw_tail.append(line)
-            if len(raw_tail) >= max_lines:
-                break
-    raw_tail.reverse()
-
-    if not raw_tail:
-        return ""
-
-    return "\n".join(raw_tail)
+    return _parse_and_render_tail(lines, max_chars=max_chars)
 
 
 def _ensure_gitignored(project_dir, entry):
@@ -206,10 +422,9 @@ def write_session_state(project_dir):
         with open(state_path, 'w', encoding='utf-8') as f:
             f.write("# Session State (auto-generated by context-reset)\n\n")
             f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-            f.write("## Last Session Transcript (tail)\n\n")
-            f.write("```\n")
+            f.write("## Last Session Conversation\n\n")
             f.write(context)
-            f.write("\n```\n")
+            f.write("\n")
         _ensure_gitignored(project_dir, "SESSION_STATE.md")
         log(f"Wrote session state to {state_path} ({len(context)} chars)")
         return state_path

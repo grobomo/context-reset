@@ -53,3 +53,10 @@
 - [x] All 4 runners updated (pretooluse, posttooluse, stop, sessionstart)
 - [x] use-workers.js scoped to hackathon26 only
 - [x] archive/ folder ignored by loader
+
+## Readable Session State (003)
+
+- [x] T001: Parse JSONL into readable conversation text (tail-read efficiently, cap at 8K tokens)
+- [x] T002: Create reusable jsonl_parser.py module in chat-export skill
+- [x] T003: Update tests for new extract_session_context format (60 tests passing)
+- [x] T004: Update SESSION_STATE.md format (no more raw JSONL in code fence)

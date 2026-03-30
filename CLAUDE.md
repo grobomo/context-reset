@@ -26,11 +26,11 @@ The prompt tells the new session to read SESSION_STATE.md (transcript context) a
 - **Detached kill on Windows**: `taskkill /T` would kill us too, so the kill runs in a detached Python subprocess.
 - **Tab colors**: Persistent per-project colors from a 10-color earth-tone palette, stored in `~/.claude/context-reset/color-map.json`.
 - **Safety**: Won't kill a shell that owns multiple Claude processes.
-- **Session state handoff**: Before launching the new tab, takes the last 200 raw JSONL lines from the current session's transcript and writes `SESSION_STATE.md` in the project dir. Raw lines preserve full context (tool use, tool results, loop patterns) so the next session can analyze what happened. Reads from end of file to avoid capturing session-start boilerplate.
+- **Session state handoff**: Before launching the new tab, reads the last ~500 JSONL lines from the transcript (efficient reverse-read, no full file load), parses them into clean readable conversation text (user messages, Claude responses, tool summaries, hook firings, boundaries), and writes `SESSION_STATE.md` capped at ~8K tokens so the next session can actually read it.
 
 ## Testing
 
 ```bash
-python scripts/test.py    # 40 tests
+python scripts/test.py    # 60 tests
 python context_reset.py --project-dir . --dry-run   # verify command without executing
 ```
