@@ -45,4 +45,4 @@
 
 ## Noise Filtering
 
-- [ ] T001 Filter boilerplate prompts (context-reset prompt, session-start hook) from transcript tail
+- [x] T001 Filter boilerplate prompts (context-reset prompt, session-start hook) from transcript tail (PR #1)
