@@ -128,6 +128,23 @@ test("smart truncation: keeps last message", "message number 499" in ctx_capped)
 # Middle messages should be dropped
 test("smart truncation: drops middle", "message number 250" not in ctx_capped)
 
+# Test no duplicate turns when single oversized entry
+single_big = [
+    _json.dumps({"type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "text": "single msg " + "x" * 5000}]}})
+]
+ctx_single = context_reset._parse_and_render_tail(single_big, max_chars=100)
+test("no duplicate on single oversized entry", ctx_single.count("single msg") == 1)
+
+# Test no overlap with few entries and tight budget
+few_entries = [
+    _json.dumps({"type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "text": f"item-{i} " + "y" * 100}]}})
+    for i in range(4)
+]
+ctx_few = context_reset._parse_and_render_tail(few_entries, max_chars=200)
+import re as _re_test
+all_items = _re_test.findall(r'item-(\d+)', ctx_few)
+test("no duplicates with few entries", len(all_items) == len(set(all_items)))
+
 # Test compact boundary
 boundary_entries = [
     _json.dumps({"type": "system", "subtype": "compact_boundary", "compactMetadata": {"trigger": "auto", "preTokens": 150000}}),
