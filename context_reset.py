@@ -373,24 +373,31 @@ def _parse_and_render_tail(jsonl_lines, max_chars=32000):
     separator = "\n[... middle of conversation truncated to fit 8K token budget ...]\n\n"
     tail_budget -= len(separator)
 
-    # Collect head turns
-    head_turns = []
+    # Collect head turns (by index)
+    head_end = 0
     head_chars = 0
-    for t in all_turns:
-        if head_chars + len(t) > head_budget and head_turns:
+    for i, t in enumerate(all_turns):
+        if head_chars + len(t) > head_budget and i > 0:
             break
-        head_turns.append(t)
+        head_end = i + 1
         head_chars += len(t)
 
-    # Collect tail turns (from end, working backwards)
-    tail_turns = []
+    # Collect tail turns from end, skipping any already in head
+    tail_start = len(all_turns)
     tail_chars = 0
-    for t in reversed(all_turns):
-        if tail_chars + len(t) > tail_budget and tail_turns:
+    for i in range(len(all_turns) - 1, -1, -1):
+        if i < head_end:
             break
-        tail_turns.append(t)
-        tail_chars += len(t)
-    tail_turns.reverse()
+        if tail_chars + len(all_turns[i]) > tail_budget and tail_start < len(all_turns):
+            break
+        tail_start = i
+        tail_chars += len(all_turns[i])
+
+    head_turns = all_turns[:head_end]
+    tail_turns = all_turns[tail_start:]
+
+    if not tail_turns:
+        return '\n'.join(head_turns)
 
     return '\n'.join(head_turns) + separator + '\n'.join(tail_turns)
 
