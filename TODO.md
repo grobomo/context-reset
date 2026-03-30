@@ -74,3 +74,8 @@
 ## Smart Truncation (004)
 
 - [x] T001: Keep first + last turns when truncating, drop the middle (most recent context is most valuable)
+
+## Hardening (005)
+
+- [x] T001: Fix smart truncation overlap — duplicate turns when head/tail regions intersect (PR #8)
+- [x] T002: Update README with current behavior (readable format, 65 tests, smart truncation)

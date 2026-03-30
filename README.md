@@ -4,8 +4,8 @@ Autonomous context reset for [Claude Code](https://docs.anthropic.com/en/docs/cl
 
 ## How it works
 
-1. Extracts session context from the current JSONL transcript (last 200 meaningful lines)
-2. Writes `SESSION_STATE.md` with the transcript tail so the new session knows what was happening
+1. Reads the last 500 JSONL lines from the transcript (efficient reverse-read, no full file load)
+2. Parses them into readable conversation text and writes `SESSION_STATE.md` (~8K tokens, smart-truncated)
 3. Opens a new terminal tab/window with `claude` pointed at your project
 4. Waits for the new Claude process to start (process count check)
 5. Verifies the new session is working (transcript file activity)
@@ -72,7 +72,7 @@ python C:/path/to/context-reset/context_reset.py
 
 Context resets use two layers to preserve continuity:
 
-- **SESSION_STATE.md** (automated): The script scrapes the last 200 meaningful lines from the current session's JSONL transcript — assistant text and user messages only (tool calls, hook feedback, and other noise are filtered out). Written to the project dir before launching the new tab. Auto-added to `.gitignore`.
+- **SESSION_STATE.md** (automated): The script reads the last 500 JSONL lines from the transcript (efficient reverse-read), parses them into clean readable conversation text — user messages, Claude responses, tool use summaries, hook firings, and context boundaries. Capped at ~8K tokens with smart truncation (keeps first ~25% + last ~75%, drops the middle). Written to the project dir before launching the new tab. Auto-added to `.gitignore`.
 - **TODO.md** (manual): The stop hook tells Claude to update TODO.md with curated task status before resetting.
 
 The new session reads `SESSION_STATE.md` first (what actually happened), then `TODO.md` (what to do next).
@@ -108,7 +108,7 @@ python scripts/test.py
 
 ```
 context_reset.py          # Main script
-scripts/test.py           # Test suite (41 tests)
+scripts/test.py           # Test suite (65 tests)
 ~/.claude/context-reset/  # Runtime data (logs, color map)
 SESSION_STATE.md          # Auto-generated in target project (gitignored)
 ```
