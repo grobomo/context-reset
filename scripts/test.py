@@ -38,7 +38,7 @@ with tempfile.TemporaryDirectory() as d:
     fake_logs = os.path.join(d, "dotclaude", "projects", logs_slug)
     os.makedirs(fake_logs)
     with open(os.path.join(fake_logs, "session.jsonl"), "w") as f:
-        f.write('{"message":{"role":"assistant","content":[{"type":"text","text":"working on feature X"}]}}\n')
+        f.write('{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"working on feature X"}]}}\n')
     orig_fn = context_reset.get_project_logs_dir
     context_reset.get_project_logs_dir = lambda proj: fake_logs
     prompt2 = context_reset.build_prompt(fake_project)
@@ -46,13 +46,99 @@ with tempfile.TemporaryDirectory() as d:
     test("writes SESSION_STATE.md file", os.path.exists(os.path.join(fake_project, "SESSION_STATE.md")))
     context_reset.get_project_logs_dir = orig_fn
 
-# --- extract_session_context ---
+# --- _tail_lines ---
+print("\n=== _tail_lines ===")
+with tempfile.TemporaryDirectory() as d:
+    # Empty file
+    empty = os.path.join(d, "empty.txt")
+    with open(empty, 'w') as f:
+        pass
+    test("empty file -> empty list", context_reset._tail_lines(empty) == [])
+
+    # Small file
+    small = os.path.join(d, "small.txt")
+    with open(small, 'w') as f:
+        for i in range(10):
+            f.write(f"line-{i}\n")
+    result = context_reset._tail_lines(small, max_lines=5)
+    test("tail 5 from 10 lines", len(result) == 5)
+    test("tail starts at line 5", result[0] == "line-5")
+    test("tail ends at line 9", result[-1] == "line-9")
+
+    # Large file with small chunk_size to test multi-chunk reading
+    big = os.path.join(d, "big.txt")
+    with open(big, 'w') as f:
+        for i in range(1000):
+            f.write(f"entry-{i}\n")
+    result = context_reset._tail_lines(big, max_lines=3, chunk_size=64)
+    test("multi-chunk tail", len(result) == 3)
+    test("multi-chunk last line", result[-1] == "entry-999")
+    test("multi-chunk first line", result[0] == "entry-997")
+
+# --- _tool_summary ---
+print("\n=== _tool_summary ===")
+test("Bash summary", context_reset._tool_summary("Bash", {"command": "git status"}) == "$ git status")
+test("Read summary", context_reset._tool_summary("Read", {"file_path": "/a/b.py"}) == "Read -> /a/b.py")
+test("Edit summary", context_reset._tool_summary("Edit", {"file_path": "/x.js"}) == "Edit -> /x.js")
+test("Glob summary", context_reset._tool_summary("Glob", {"pattern": "*.py"}) == "Glob -> *.py")
+test("Grep summary", context_reset._tool_summary("Grep", {"pattern": "TODO"}) == "Grep -> TODO")
+test("Skill summary", context_reset._tool_summary("Skill", {"skill": "commit"}) == "Skill: commit")
+test("MCP summary", context_reset._tool_summary("mcp__blueprint__click", {}) == "MCP blueprint/click")
+test("unknown tool", context_reset._tool_summary("FooBar", {}) == "FooBar()")
+long_cmd = "a" * 100
+test("long Bash cmd truncated", len(context_reset._tool_summary("Bash", {"command": long_cmd})) <= 85)
+
+# --- _parse_and_render_tail ---
+print("\n=== _parse_and_render_tail ===")
+import json as _json
+entries = [
+    _json.dumps({"type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "text": "I will fix the bug"}]}}),
+    _json.dumps({"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": "looks good"}]}}),
+    _json.dumps({"type": "assistant", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "t1", "name": "Bash", "input": {"command": "git status"}}]}}),
+    _json.dumps({"type": "user", "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1", "content": "On branch main"}]}}),
+    _json.dumps({"type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "text": "Done fixing"}]}}),
+]
+ctx = context_reset._parse_and_render_tail(entries)
+test("readable: includes assistant text", "I will fix the bug" in ctx)
+test("readable: includes user text", "looks good" in ctx)
+test("readable: includes tool summary", "$ git status" in ctx)
+test("readable: includes tool result", "On branch main" in ctx)
+test("readable: includes done text", "Done fixing" in ctx)
+test("readable: has role headers", "--- Claude" in ctx and "--- User" in ctx)
+test("readable: NOT raw JSON", not ctx.strip().startswith('{'))
+
+# Test hooks are shown
+hook_entries = [
+    _json.dumps({"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": "<system-reminder>Stop hook says: keep going</system-reminder>continue please"}]}}),
+]
+ctx_hook = context_reset._parse_and_render_tail(hook_entries)
+test("readable: shows hooks", "[Hook]" in ctx_hook and "Stop hook" in ctx_hook)
+test("readable: shows user text after hook", "continue please" in ctx_hook)
+
+# Test char budget cap
+big_entries = [
+    _json.dumps({"type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "text": f"message number {i} with padding " + "x" * 200}]}})
+    for i in range(500)
+]
+ctx_capped = context_reset._parse_and_render_tail(big_entries, max_chars=5000)
+test("char budget respected", len(ctx_capped) <= 6000)  # some overhead for truncation notice
+test("truncation notice present", "truncated" in ctx_capped)
+
+# Test compact boundary
+boundary_entries = [
+    _json.dumps({"type": "system", "subtype": "compact_boundary", "compactMetadata": {"trigger": "auto", "preTokens": 150000}}),
+    _json.dumps({"type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "text": "After compaction"}]}}),
+]
+ctx_boundary = context_reset._parse_and_render_tail(boundary_entries)
+test("boundary shown", "compacted" in ctx_boundary and "150,000" in ctx_boundary)
+
+# --- extract_session_context (integration) ---
 print("\n=== extract_session_context ===")
 with tempfile.TemporaryDirectory() as d:
     # No logs -> empty
     test("no logs -> empty string", context_reset.extract_session_context(d) == "")
 
-    # With fake logs -- raw JSONL tail
+    # With fake logs
     fake_project = os.path.join(d, "proj")
     os.makedirs(fake_project)
     logs_slug = os.path.abspath(fake_project).replace("\\", "-").replace("/", "-").replace(":", "-")
@@ -60,46 +146,19 @@ with tempfile.TemporaryDirectory() as d:
         logs_slug = logs_slug[1:]
     fake_logs = os.path.join(d, "dotclaude", "projects", logs_slug)
     os.makedirs(fake_logs)
-    import json as _json
-    entries = [
-        {"message": {"role": "assistant", "content": [{"type": "text", "text": "I will fix the bug"}]}},
-        {"message": {"role": "user", "content": [{"type": "text", "text": "looks good"}]}},
-        {"message": {"role": "assistant", "content": [{"type": "tool_use", "id": "t1", "name": "Bash", "input": {}}]}},
-        {"type": "progress", "data": {"type": "hook_progress"}},
-        {"message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1", "content": "ok"}]}},
-        {"message": {"role": "assistant", "content": [{"type": "text", "text": "Done fixing"}]}},
+    test_entries = [
+        {"type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "text": "Working on feature X"}]}},
+        {"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": "great"}]}},
     ]
     with open(os.path.join(fake_logs, "session.jsonl"), "w") as f:
-        for e in entries:
+        for e in test_entries:
             f.write(_json.dumps(e) + "\n")
     orig_fn2 = context_reset.get_project_logs_dir
     context_reset.get_project_logs_dir = lambda proj: fake_logs
     ctx = context_reset.extract_session_context(fake_project)
-    test("includes assistant text", "I will fix the bug" in ctx)
-    test("includes user text", "looks good" in ctx)
-    test("includes tool_use (raw tail)", "tool_use" in ctx)
-    test("includes tool_result (raw tail)", "tool_result" in ctx)
-    test("includes all entries (raw tail)", "Done fixing" in ctx)
-    # Each line is raw JSON
-    ctx_lines = [l for l in ctx.split("\n") if l.strip()]
-    test("each line is valid JSON", all(_json.loads(l) for l in ctx_lines))
-
-    # Test max_lines truncation -- takes from end
-    ctx_short = context_reset.extract_session_context(fake_project, max_lines=2)
-    short_lines = [l for l in ctx_short.split("\n") if l.strip()]
-    test("max_lines=2 returns 2 lines from end", len(short_lines) == 2)
-    test("max_lines=2 last line has final entry", "Done fixing" in short_lines[-1])
-
-    # Test with many entries -- only last N returned
-    many_entries = [{"message": {"role": "assistant", "content": [{"type": "text", "text": f"msg-{i}"}]}} for i in range(500)]
-    with open(os.path.join(fake_logs, "session.jsonl"), "w") as f:
-        for e in many_entries:
-            f.write(_json.dumps(e) + "\n")
-    ctx_tail = context_reset.extract_session_context(fake_project, max_lines=200)
-    tail_lines = [l for l in ctx_tail.split("\n") if l.strip()]
-    test("200 max_lines from 500 entries", len(tail_lines) == 200)
-    test("tail starts at entry 300", "msg-300" in tail_lines[0])
-    test("tail ends at entry 499", "msg-499" in tail_lines[-1])
+    test("integration: readable output", "Working on feature X" in ctx)
+    test("integration: has role headers", "--- Claude" in ctx)
+    test("integration: not raw JSON", not ctx.strip().startswith('{'))
     context_reset.get_project_logs_dir = orig_fn2
 
 # --- get_first_todo ---
