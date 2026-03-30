@@ -52,7 +52,7 @@ with tempfile.TemporaryDirectory() as d:
     # No logs -> empty
     test("no logs -> empty string", context_reset.extract_session_context(d) == "")
 
-    # With fake logs
+    # With fake logs -- raw JSONL tail
     fake_project = os.path.join(d, "proj")
     os.makedirs(fake_project)
     logs_slug = os.path.abspath(fake_project).replace("\\", "-").replace("/", "-").replace(":", "-")
@@ -75,34 +75,31 @@ with tempfile.TemporaryDirectory() as d:
     orig_fn2 = context_reset.get_project_logs_dir
     context_reset.get_project_logs_dir = lambda proj: fake_logs
     ctx = context_reset.extract_session_context(fake_project)
-    test("extracts assistant text", "[assistant] I will fix the bug" in ctx)
-    test("extracts user text", "[user] looks good" in ctx)
-    test("skips tool_use blocks", "tool_use" not in ctx and "Bash" not in ctx)
-    test("skips tool_result blocks", "tool_result" not in ctx)
-    test("skips progress entries", "hook_progress" not in ctx)
-    test("includes final assistant text", "[assistant] Done fixing" in ctx)
+    test("includes assistant text", "I will fix the bug" in ctx)
+    test("includes user text", "looks good" in ctx)
+    test("includes tool_use (raw tail)", "tool_use" in ctx)
+    test("includes tool_result (raw tail)", "tool_result" in ctx)
+    test("includes all entries (raw tail)", "Done fixing" in ctx)
+    # Each line is raw JSON
+    ctx_lines = [l for l in ctx.split("\n") if l.strip()]
+    test("each line is valid JSON", all(_json.loads(l) for l in ctx_lines))
 
-    # Test max_lines truncation
-    ctx_short = context_reset.extract_session_context(fake_project, max_lines=1)
-    test("max_lines=1 returns only last line", ctx_short.count("\n") == 0 and "Done fixing" in ctx_short)
+    # Test max_lines truncation -- takes from end
+    ctx_short = context_reset.extract_session_context(fake_project, max_lines=2)
+    short_lines = [l for l in ctx_short.split("\n") if l.strip()]
+    test("max_lines=2 returns 2 lines from end", len(short_lines) == 2)
+    test("max_lines=2 last line has final entry", "Done fixing" in short_lines[-1])
 
-    # Test noise filtering
-    noise_entries = [
-        {"message": {"role": "user", "content": [{"type": "text", "text": "real user message"}]}},
-        {"message": {"role": "user", "content": [{"type": "text", "text": "Stop hook feedback:\nDO NOT STOP..."}]}},
-        {"message": {"role": "user", "content": [{"type": "text", "text": "Base directory for this skill: ~/.claude/skills/foo\n# Skill docs..."}]}},
-        {"message": {"role": "user", "content": [{"type": "text", "text": "[Request interrupted by user]"}]}},
-        {"message": {"role": "assistant", "content": [{"type": "text", "text": "final answer"}]}},
-    ]
+    # Test with many entries -- only last N returned
+    many_entries = [{"message": {"role": "assistant", "content": [{"type": "text", "text": f"msg-{i}"}]}} for i in range(500)]
     with open(os.path.join(fake_logs, "session.jsonl"), "w") as f:
-        for e in noise_entries:
+        for e in many_entries:
             f.write(_json.dumps(e) + "\n")
-    ctx_filtered = context_reset.extract_session_context(fake_project)
-    test("filters stop hook feedback", "Stop hook feedback" not in ctx_filtered)
-    test("filters skill boilerplate", "Base directory for this skill" not in ctx_filtered)
-    test("filters request interrupted", "[Request interrupted" not in ctx_filtered)
-    test("keeps real user messages", "real user message" in ctx_filtered)
-    test("keeps assistant messages through filter", "final answer" in ctx_filtered)
+    ctx_tail = context_reset.extract_session_context(fake_project, max_lines=200)
+    tail_lines = [l for l in ctx_tail.split("\n") if l.strip()]
+    test("200 max_lines from 500 entries", len(tail_lines) == 200)
+    test("tail starts at entry 300", "msg-300" in tail_lines[0])
+    test("tail ends at entry 499", "msg-499" in tail_lines[-1])
     context_reset.get_project_logs_dir = orig_fn2
 
 # --- get_first_todo ---
