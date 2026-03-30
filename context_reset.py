@@ -17,6 +17,9 @@ Audit log: ~/.claude/context-reset/YYYY-MM-DD.log (rotated daily)
 """
 
 import argparse
+import csv
+import ctypes
+import io
 import json
 import re
 import signal
@@ -532,7 +535,6 @@ def _load_process_table():
     if IS_WIN:
         # Try wmic first (faster, more reliable on loaded systems)
         try:
-            import csv, io
             out = subprocess.check_output(
                 ['wmic', 'process', 'get', 'ProcessId,ParentProcessId,Name', '/format:csv'],
                 encoding='utf-8', timeout=15, startupinfo=_si(),
@@ -785,7 +787,6 @@ def _save_foreground_window():
     if not IS_WIN:
         return None
     try:
-        import ctypes
         return ctypes.windll.user32.GetForegroundWindow()
     except Exception:
         return None
@@ -797,7 +798,6 @@ def _restore_foreground_window(hwnd, delay=0.5):
         return
     try:
         time.sleep(delay)
-        import ctypes
         ctypes.windll.user32.SetForegroundWindow(hwnd)
         log("Restored focus to original window")
     except Exception as e:
