@@ -60,3 +60,8 @@
 - [x] T002: Create reusable jsonl_parser.py module in chat-export skill
 - [x] T003: Update tests for new extract_session_context format (60 tests passing)
 - [x] T004: Update SESSION_STATE.md format (no more raw JSONL in code fence)
+- [x] T005: Move inline `import re` to top-level
+
+## Review
+
+- [ ] Read SESSION_STATE.md after next context reset and verify it's readable, useful, and within token budget

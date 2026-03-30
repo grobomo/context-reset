@@ -18,6 +18,7 @@ Audit log: ~/.claude/context-reset/YYYY-MM-DD.log (rotated daily)
 
 import argparse
 import json
+import re
 import signal
 import subprocess
 import os
@@ -225,8 +226,6 @@ def _parse_and_render_tail(jsonl_lines, max_chars=32000):
 
     Returns string capped at max_chars (~8K tokens).
     """
-    import re as _re
-
     # First pass: collect tool results
     tool_results = {}
     records = []
@@ -310,9 +309,9 @@ def _parse_and_render_tail(jsonl_lines, max_chars=32000):
                 text = block.get('text', '')
                 # Extract and show hooks compactly
                 if '<system-reminder>' in text and role == 'user':
-                    hooks = _re.findall(
+                    hooks = re.findall(
                         r'<system-reminder>(.*?)</system-reminder>',
-                        text, flags=_re.DOTALL
+                        text, flags=re.DOTALL
                     )
                     for h in hooks:
                         h = h.strip()
@@ -322,9 +321,9 @@ def _parse_and_render_tail(jsonl_lines, max_chars=32000):
                                 h_short += '...'
                             parts.append(f"  [Hook] {h_short}")
                             has_content = True
-                    cleaned = _re.sub(
+                    cleaned = re.sub(
                         r'<system-reminder>.*?</system-reminder>',
-                        '', text, flags=_re.DOTALL
+                        '', text, flags=re.DOTALL
                     ).strip()
                     if cleaned:
                         if len(cleaned) > 1000:
