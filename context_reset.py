@@ -1022,7 +1022,7 @@ def main():
     saved_hwnd = _save_foreground_window()
     subprocess.Popen(cmd, shell=True)
     _restore_foreground_window(saved_hwnd)
-    log(f"New tab opened in {project_name}")
+    log(f"New tab opened in {launch_name}")
 
     if args.no_close:
         log("--no-close flag set, keeping old tab open")
