@@ -467,10 +467,12 @@ def write_session_state(project_dir):
 def build_prompt(project_dir):
     state_file = write_session_state(project_dir)
     base = (
-        "Context was reset. "
-        "Do not ask what to do. Pick up where the last session left off. "
+        "Context was reset. Do not ask what to do. "
+        "Pick up where the last session left off. "
         "Any unchecked todo item is an active task regardless of "
-        "what section or header it falls under."
+        "what section or header it falls under. "
+        "Mindset: be slow and systematic. Build repeatable, modular code "
+        "with excellent user experience. No rush."
     )
     if state_file:
         return (
@@ -914,7 +916,7 @@ def _kill_old_tab_unix(shell_pid):
 
 def get_project_logs_dir(project_dir):
     home = os.path.expanduser("~")
-    slug = os.path.abspath(project_dir).replace("\\", "-").replace("/", "-").replace(":", "-")
+    slug = os.path.abspath(project_dir).replace("\\", "-").replace("/", "-").replace(":", "-").replace(".", "-")
     if slug.startswith("-"):
         slug = slug[1:]
     return os.path.join(home, ".claude", "projects", slug)
@@ -966,7 +968,14 @@ def main():
 
     cleanup_old_logs()
 
-    project_dir = os.path.abspath(args.project_dir)
+    project_dir = os.path.abspath(os.path.expanduser(args.project_dir))
+    # Sanity check: reject paths inside Git install dir (Git Bash CWD leak)
+    if 'Program Files' in project_dir and 'Git' in project_dir:
+        home = os.path.expanduser('~')
+        basename = os.path.basename(project_dir)
+        fallback = os.path.join(home, basename) if basename else home
+        log(f"WARNING: project_dir '{project_dir}' looks like Git install dir, using '{fallback}'")
+        project_dir = fallback
     prompt = args.prompt or build_prompt(project_dir)
     project_name = os.path.basename(project_dir)
 
