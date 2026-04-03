@@ -957,7 +957,10 @@ def verify_claude_working(project_dir, timeout=45):
 
 def main():
     parser = argparse.ArgumentParser(description="Autonomous Claude context reset")
-    parser.add_argument("--project-dir", default=os.environ.get("CLAUDE_PROJECT_DIR", os.getcwd()))
+    parser.add_argument("--project-dir", default=os.environ.get("CLAUDE_PROJECT_DIR", os.getcwd()),
+                        help="Current project dir (for state saving)")
+    parser.add_argument("--target-project", default=None,
+                        help="Switch to a different project dir for the new session (cross-project reset)")
     parser.add_argument("--prompt", default=None)
     parser.add_argument("--no-close", action="store_true", help="Don't close old tab")
     parser.add_argument("--close-tab", action="store_true",
