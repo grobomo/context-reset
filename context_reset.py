@@ -1045,8 +1045,8 @@ def main():
         log("=== Context reset FAILED (no new process) ===")
         return
 
-    # Phase 2: Verify working
-    working = verify_claude_working(project_dir, timeout=args.timeout)
+    # Phase 2: Verify working (check target project's logs, not source)
+    working = verify_claude_working(launch_dir, timeout=args.timeout)
     if working:
         log("New Claude confirmed working")
         shell_pid = find_shell_pid()
