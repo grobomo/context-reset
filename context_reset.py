@@ -979,22 +979,34 @@ def main():
         fallback = os.path.join(home, basename) if basename else home
         log(f"WARNING: project_dir '{project_dir}' looks like Git install dir, using '{fallback}'")
         project_dir = fallback
-    prompt = args.prompt or build_prompt(project_dir)
+    # Cross-project reset: save state in current project, launch in target
+    launch_dir = project_dir
+    if args.target_project:
+        launch_dir = os.path.abspath(os.path.expanduser(args.target_project))
+        if not os.path.isdir(launch_dir):
+            log(f"ERROR: target project dir does not exist: {launch_dir}")
+            return
+        log(f"Cross-project reset: saving state in {project_dir}, launching in {launch_dir}")
+
+    prompt = args.prompt or build_prompt(launch_dir)
+    launch_name = os.path.basename(launch_dir)
     project_name = os.path.basename(project_dir)
 
-    log(f"=== Context reset started for {project_name} ===")
-    log(f"Project dir: {project_dir}")
+    log(f"=== Context reset started for {launch_name} ===")
+    log(f"Project dir (state): {project_dir}")
+    if launch_dir != project_dir:
+        log(f"Target dir (launch): {launch_dir}")
     log(f"Platform: {sys.platform}")
     log(f"Prompt: {prompt[:80]}...")
     log(f"Close old tab: {not args.no_close}")
 
     # Tab title: first unchecked TODO item, or project name as fallback
-    first_todo = get_first_todo(project_dir)
-    tab_title = first_todo or project_name
-    tab_color = get_tab_color(project_dir)
+    first_todo = get_first_todo(launch_dir)
+    tab_title = first_todo or launch_name
+    tab_color = get_tab_color(launch_dir)
     log(f"Tab: title='{tab_title}', color={tab_color}")
 
-    cmd = build_launch_cmd(project_dir, prompt, tab_title, tab_color)
+    cmd = build_launch_cmd(launch_dir, prompt, tab_title, tab_color)
 
     if args.dry_run:
         log(f"DRY RUN - command: {cmd}")
