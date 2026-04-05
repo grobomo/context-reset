@@ -128,24 +128,6 @@ def get_tab_color(project_dir):
 
 # ============ Helpers ============
 
-def get_first_todo(project_dir):
-    """Return the first unchecked TODO item text, or None."""
-    todo = os.path.join(project_dir, "TODO.md")
-    if not os.path.exists(todo):
-        return None
-    try:
-        with open(todo, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if line.startswith("- [ ]"):
-                    text = line[5:].strip()
-                    if len(text) > 50:
-                        text = text[:47] + "..."
-                    return text
-    except Exception:
-        pass
-    return None
-
 
 def _tail_lines(filepath, max_lines=500, chunk_size=65536):
     """Read the last N lines from a file efficiently without loading the whole file.
@@ -467,10 +449,12 @@ def write_session_state(project_dir):
 def build_prompt(project_dir):
     state_file = write_session_state(project_dir)
     base = (
-        "Context was reset. "
-        "Do not ask what to do. Pick up where the last session left off. "
+        "Context was reset. Do not ask what to do. "
+        "Pick up where the last session left off. "
         "Any unchecked todo item is an active task regardless of "
-        "what section or header it falls under."
+        "what section or header it falls under. "
+        "Mindset: be slow and systematic. Build repeatable, modular code "
+        "with excellent user experience. No rush."
     )
     if state_file:
         return (
@@ -821,14 +805,25 @@ def _save_foreground_window():
         return None
 
 
-def _restore_foreground_window(hwnd, delay=0.5):
-    """Restore focus to a saved window handle after a delay (Windows only)."""
+def _restore_foreground_window(hwnd, delay=0.3):
+    """Restore focus to a saved window handle after a delay (Windows only).
+
+    Tries multiple times because Windows Terminal tab creation can steal
+    focus asynchronously after the initial Popen returns.
+    """
     if not IS_WIN or not hwnd:
         return
+    user32 = ctypes.windll.user32
     try:
-        time.sleep(delay)
-        ctypes.windll.user32.SetForegroundWindow(hwnd)
-        log("Restored focus to original window")
+        for attempt in range(4):
+            time.sleep(delay)
+            # BringWindowToTop + SetForegroundWindow for reliability
+            user32.BringWindowToTop(hwnd)
+            user32.SetForegroundWindow(hwnd)
+            if user32.GetForegroundWindow() == hwnd:
+                log(f"Restored focus to original window (attempt {attempt + 1})")
+                return
+        log("WARNING: focus restore attempted 4 times, may not have succeeded")
     except Exception as e:
         log(f"WARNING: could not restore focus: {e}")
 
@@ -914,7 +909,7 @@ def _kill_old_tab_unix(shell_pid):
 
 def get_project_logs_dir(project_dir):
     home = os.path.expanduser("~")
-    slug = os.path.abspath(project_dir).replace("\\", "-").replace("/", "-").replace(":", "-")
+    slug = os.path.abspath(project_dir).replace("\\", "-").replace("/", "-").replace(":", "-").replace(".", "-")
     if slug.startswith("-"):
         slug = slug[1:]
     return os.path.join(home, ".claude", "projects", slug)
@@ -955,41 +950,124 @@ def verify_claude_working(project_dir, timeout=45):
 
 def main():
     parser = argparse.ArgumentParser(description="Autonomous Claude context reset")
-    parser.add_argument("--project-dir", default=os.environ.get("CLAUDE_PROJECT_DIR", os.getcwd()))
+    parser.add_argument("--project-dir", default=os.environ.get("CLAUDE_PROJECT_DIR", os.getcwd()),
+                        help="Current project dir (for state saving)")
+    parser.add_argument("--target-project", default=None,
+                        help="Switch to a different project dir for the new session (cross-project reset)")
     parser.add_argument("--prompt", default=None)
     parser.add_argument("--no-close", action="store_true", help="Don't close old tab")
+    parser.add_argument("--preserve", action="store_true",
+                        help="One-shot: keep old tab open this time only (also triggered by ~/.claude/.preserve-tab file)")
     parser.add_argument("--close-tab", action="store_true",
                         help="Auto-close terminal tab (Windows: sets WT closeOnExit=always temporarily)")
     parser.add_argument("--timeout", type=int, default=45, help="Phase 2 verification timeout in seconds")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
+    # Exclusive OS-level file lock: prevents concurrent resets on the same project.
+    # Uses msvcrt.locking (Windows) / fcntl.flock (Unix) for atomic, crash-safe locking.
+    # If process crashes, OS auto-releases the lock — no stale-lock problem.
+    project_key = os.path.abspath(os.path.expanduser(args.project_dir)).replace(os.sep, "-").replace(":", "").strip("-")
+    lock_dir = os.path.join(os.path.expanduser("~"), ".claude", "context-reset")
+    os.makedirs(lock_dir, exist_ok=True)
+    lock_file = os.path.join(lock_dir, f".lock-{project_key}")
+    _lock_fh = None  # Keep file handle open for duration (OS lock requires it)
+    try:
+        _lock_fh = open(lock_file, "w")
+        if IS_WIN:
+            import msvcrt
+            msvcrt.locking(_lock_fh.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(_lock_fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        _lock_fh.write(f"{os.getpid()}\n{time.time()}\n")
+        _lock_fh.flush()
+    except (IOError, OSError):
+        # Lock held by another process — another reset is in progress
+        log("SKIPPED: another context reset is already running (OS lock held)")
+        if _lock_fh:
+            _lock_fh.close()
+        return
+    except Exception as e:
+        log(f"WARNING: lock acquisition failed ({e}), proceeding anyway")
+        if _lock_fh:
+            _lock_fh.close()
+        _lock_fh = None
+
+    # One-shot preserve: check for flag file
+    preserve_flag = os.path.join(os.path.expanduser("~"), ".claude", ".preserve-tab")
+    if os.path.exists(preserve_flag):
+        args.preserve = True
+        try:
+            os.remove(preserve_flag)
+            log("One-shot preserve: found .preserve-tab flag file, will keep old tab")
+        except Exception:
+            pass
+
     cleanup_old_logs()
 
-    project_dir = os.path.abspath(args.project_dir)
-    prompt = args.prompt or build_prompt(project_dir)
-    project_name = os.path.basename(project_dir)
+    project_dir = os.path.abspath(os.path.expanduser(args.project_dir))
+    # Sanity check: reject paths inside Git install dir (Git Bash CWD leak)
+    if 'Program Files' in project_dir and 'Git' in project_dir:
+        home = os.path.expanduser('~')
+        basename = os.path.basename(project_dir)
+        fallback = os.path.join(home, basename) if basename else home
+        log(f"WARNING: project_dir '{project_dir}' looks like Git install dir, using '{fallback}'")
+        project_dir = fallback
+    # Cross-project reset: save state in current project, launch in target
+    launch_dir = project_dir
+    if args.target_project:
+        launch_dir = os.path.abspath(os.path.expanduser(args.target_project))
+        if not os.path.isdir(launch_dir):
+            log(f"ERROR: target project dir does not exist: {launch_dir}")
+            return
+        log(f"Cross-project reset: saving state in {project_dir}, launching in {launch_dir}")
 
-    log(f"=== Context reset started for {project_name} ===")
-    log(f"Project dir: {project_dir}")
+    prompt = args.prompt or build_prompt(launch_dir)
+    launch_name = os.path.basename(launch_dir)
+
+    log(f"=== Context reset started for {launch_name} ===")
+    log(f"Project dir (state): {project_dir}")
+    if launch_dir != project_dir:
+        log(f"Target dir (launch): {launch_dir}")
     log(f"Platform: {sys.platform}")
     log(f"Prompt: {prompt[:80]}...")
     log(f"Close old tab: {not args.no_close}")
 
-    # Tab title: first unchecked TODO item, or project name as fallback
-    first_todo = get_first_todo(project_dir)
-    tab_title = first_todo or project_name
-    tab_color = get_tab_color(project_dir)
+    # Tab title: always the folder name (short, stable)
+    tab_title = launch_name
+    tab_color = get_tab_color(launch_dir)
     log(f"Tab: title='{tab_title}', color={tab_color}")
 
-    cmd = build_launch_cmd(project_dir, prompt, tab_title, tab_color)
+    cmd = build_launch_cmd(launch_dir, prompt, tab_title, tab_color)
+
+    def _remove_lock():
+        nonlocal _lock_fh
+        try:
+            if _lock_fh:
+                _lock_fh.close()  # Closing file handle releases OS lock
+                _lock_fh = None
+            if os.path.exists(lock_file):
+                os.remove(lock_file)
+        except Exception:
+            pass
 
     if args.dry_run:
         log(f"DRY RUN - command: {cmd}")
         shell_pid = find_shell_pid()
         log(f"DRY RUN - shell PID to kill: {shell_pid}")
         log("=== Dry run complete ===")
+        _remove_lock()
         return
+
+    # NOTE: Claude Code's "Do you trust this folder?" dialog fires on every
+    # new interactive session. There is NO way to pre-trust a directory —
+    # no settings.json field, no CLI flag, no env var. claude -p skips it
+    # only for non-interactive mode. Multiple open feature requests:
+    # https://github.com/anthropics/claude-code/issues/12737 (trustedDirectories)
+    # https://github.com/anthropics/claude-code/issues/29285 (permanent trust)
+    # Until Anthropic adds this, cross-project resets to new dirs require
+    # the user to press Enter once on the trust dialog.
 
     # Phase 1: Launch new tab
     before = count_claude_processes()
@@ -998,11 +1076,22 @@ def main():
     saved_hwnd = _save_foreground_window()
     subprocess.Popen(cmd, shell=True)
     _restore_foreground_window(saved_hwnd)
-    log(f"New tab opened in {project_name}")
+    log(f"New tab opened in {launch_name}")
 
-    if args.no_close:
-        log("--no-close flag set, keeping old tab open")
-        log("=== Context reset complete (no-close mode) ===")
+    if args.no_close or args.preserve:
+        mode = "preserve (one-shot)" if args.preserve else "no-close"
+        log(f"--{mode} mode, keeping old tab open")
+        # Signal the stop hook to let this tab idle instead of blocking with
+        # "DO NOT STOP / keep working". One-shot flag, consumed on first read.
+        idle_flag = os.path.join(os.path.expanduser("~"), ".claude", ".preserved-tab-idle")
+        try:
+            with open(idle_flag, "w") as f:
+                f.write(f"Preserved at {datetime.now().isoformat()} for review\n")
+            log("Set .preserved-tab-idle flag (stop hook will allow idle)")
+        except Exception:
+            pass
+        log(f"=== Context reset complete ({mode}) ===")
+        _remove_lock()
         return
 
     # Phase 1b: Wait for new process
@@ -1019,10 +1108,11 @@ def main():
     if not process_detected:
         log("WARNING: new Claude not detected after 15s, keeping old tab open")
         log("=== Context reset FAILED (no new process) ===")
+        _remove_lock()
         return
 
-    # Phase 2: Verify working
-    working = verify_claude_working(project_dir, timeout=args.timeout)
+    # Phase 2: Verify working (check target project's logs, not source)
+    working = verify_claude_working(launch_dir, timeout=args.timeout)
     if working:
         log("New Claude confirmed working")
         shell_pid = find_shell_pid()
@@ -1035,6 +1125,8 @@ def main():
     else:
         log(f"WARNING: no transcript activity after {args.timeout}s, keeping old tab open")
         log("=== Context reset FAILED (no activity detected) ===")
+
+    _remove_lock()
 
 
 if __name__ == "__main__":
