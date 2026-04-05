@@ -51,8 +51,9 @@ python context_reset.py --timeout 60
 
 Each new tab gets:
 
-- **Title**: The first unchecked `- [ ]` item from `TODO.md`, so you can see what each Claude is working on. Falls back to the project directory name.
+- **Title**: The project folder name — short, stable, and locked with `--suppressApplicationTitle` so Claude can't overwrite it.
 - **Color**: A persistent per-project color from a 10-color palette. All tabs for the same project share the same color. Colors are stored in `~/.claude/context-reset/color-map.json` and auto-rotate through unused slots.
+- **Focus**: New tabs don't steal focus — the script saves and restores the foreground window (Windows).
 
 ## Integration with Claude Code hooks
 
@@ -107,8 +108,10 @@ python scripts/test.py
 ## Files
 
 ```
-context_reset.py          # Main script
-scripts/test.py           # Test suite (65 tests)
+context_reset.py          # Main script — context reset orchestrator
+task_claims.py            # Multi-tab task negotiation with OS-level file locks
+scripts/test.py           # Tests for context_reset (62 tests)
+scripts/test_task_claims.py  # Tests for task_claims (35 tests)
 ~/.claude/context-reset/  # Runtime data (logs, color map)
 SESSION_STATE.md          # Auto-generated in target project (gitignored)
 ```
