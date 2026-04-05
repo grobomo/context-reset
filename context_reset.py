@@ -1025,7 +1025,6 @@ def main():
 
     prompt = args.prompt or build_prompt(launch_dir)
     launch_name = os.path.basename(launch_dir)
-    project_name = os.path.basename(project_dir)
 
     log(f"=== Context reset started for {launch_name} ===")
     log(f"Project dir (state): {project_dir}")
