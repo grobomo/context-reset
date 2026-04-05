@@ -1,6 +1,6 @@
-# context-reset
+# context-reset (new-session)
 
-Autonomous context reset for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). When a session's context window fills up, this script seamlessly transfers work to a fresh Claude instance in a new terminal tab — no human intervention needed.
+Launch a new Claude Code session in any project. When a session's context window fills up, this script seamlessly transfers work to a fresh Claude instance in a new terminal tab — no human intervention needed. Also supports switching to a different project entirely.
 
 ## How it works
 
@@ -25,27 +25,29 @@ If any step fails, the old tab is preserved. Nothing is lost.
 ## Usage
 
 ```bash
-# Basic — resets in current project directory
-python context_reset.py
+# Basic — new session in current project (context reset)
+python new_session.py --project-dir /path/to/project
 
-# Specify project
-python context_reset.py --project-dir /path/to/project
+# Switch to a different project
+python new_session.py --project-dir /path/to/other/project
 
 # Auto-close the old tab (default: tab stays open for review)
-python context_reset.py --close-tab
+python new_session.py --close-tab
 
 # Custom prompt for the new session
-python context_reset.py --prompt "Fix the failing tests"
+python new_session.py --prompt "Fix the failing tests"
 
 # Preview without executing
-python context_reset.py --dry-run
+python new_session.py --dry-run
 
 # Keep old tab open (new tab only)
-python context_reset.py --no-close
+python new_session.py --no-close
 
 # Custom verification timeout (default: 45s)
-python context_reset.py --timeout 60
+python new_session.py --timeout 60
 ```
+
+> **Note:** `context_reset.py` still works as a backward-compatible alias.
 
 ## Tab identification
 
@@ -60,13 +62,13 @@ Each new tab gets:
 Add to a [stop hook](https://docs.anthropic.com/en/docs/claude-code/hooks) module to let Claude trigger resets autonomously when context gets heavy:
 
 ```
-python C:/path/to/context-reset/context_reset.py --project-dir $CLAUDE_PROJECT_DIR
+python C:/path/to/context-reset/new_session.py --project-dir $CLAUDE_PROJECT_DIR
 ```
 
 The script reads `$CLAUDE_PROJECT_DIR` by default, so from a hook you can simply:
 
 ```
-python C:/path/to/context-reset/context_reset.py
+python C:/path/to/context-reset/new_session.py
 ```
 
 ## Session continuity
@@ -108,9 +110,10 @@ python scripts/test.py
 ## Files
 
 ```
-context_reset.py          # Main script — context reset orchestrator
+new_session.py            # Main script — session launcher and state handoff
+context_reset.py          # Backward-compat alias (imports new_session.py)
 task_claims.py            # Multi-tab task negotiation with OS-level file locks
-scripts/test.py           # Tests for context_reset (62 tests)
+scripts/test.py           # Tests for new_session (62 tests)
 scripts/test_task_claims.py  # Tests for task_claims (35 tests)
 ~/.claude/context-reset/  # Runtime data (logs, color map)
 SESSION_STATE.md          # Auto-generated in target project (gitignored)

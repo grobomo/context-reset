@@ -87,3 +87,14 @@
 - [x] T003: Commit task_claims.py with tests
 - [x] T004: Tested Notification start hook — DOES NOT WORK. Hook stderr is captured by Claude Code, not passed to terminal. OSC sequence shows as text `]0;context-reset` in output. Removed hook. Tab color is the persistent project identifier; `wt --title` sets initial title before Claude takes over.
 - [x] T005: Removed PostToolUse reassertion — would kill Claude's green status icon. Tab color identifies project instead.
+
+## Rename: context-reset → new-session (007)
+
+The name "context-reset" confuses Claude into thinking this is only for resetting context in the current project. It's actually for opening a new Claude Code session in ANY project (same or different). Rename to make the purpose clear.
+
+- [ ] T001: Create `new_session.py` (copy of `context_reset.py` with updated docstring/naming)
+- [ ] T002: Update stop-message.txt to reference `new_session.py` instead of `context_reset.py`
+- [ ] T003: Add explicit "switch project" usage example to stop-message.txt: `python new_session.py --project-dir /path/to/other/project`
+- [ ] T004: Update all hook module references (auto-continue.js, load-instructions.js, etc.)
+- [ ] T005: Keep `context_reset.py` as backward-compat alias (imports and calls new_session.py)
+- [ ] T006: Update README.md and CLAUDE.md with new naming
