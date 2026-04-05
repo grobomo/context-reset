@@ -30,7 +30,7 @@
 - [x] Add tests for `verify_claude_working` with mock transcript files
 - [x] Add CLAUDE.md for project-level context (what it does, how it integrates)
 - [x] Batch-query process tree in one PowerShell call instead of per-PID (reduces reset latency)
-- [x] Remove --suppressApplicationTitle to preserve Claude's green activity icon in WT tabs
+- [x] Re-add --suppressApplicationTitle to lock tab title (user preference: folder name stays visible)
 
 ## Session State Handoff
 
@@ -79,3 +79,9 @@
 
 - [x] T001: Fix smart truncation overlap — duplicate turns when head/tail regions intersect (PR #8)
 - [x] T002: Update README with current behavior (readable format, 65 tests, smart truncation)
+
+## Quick Start Guide (006)
+
+- [x] T001: Tab UX improvements — no focus steal, folder name title, suppressApplicationTitle
+- [ ] T002: Add task_claims.py tests
+- [ ] T003: Commit task_claims.py with tests

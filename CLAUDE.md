@@ -24,7 +24,9 @@ The prompt tells the new session to read SESSION_STATE.md (transcript context) a
 
 - **Two-phase verification**: Process count alone is unreliable (multiple Claude instances). Transcript file activity confirms the new session is actually working.
 - **Detached kill on Windows**: `taskkill /T` would kill us too, so the kill runs in a detached Python subprocess.
+- **Tab title**: Always the folder name (short, stable). `--suppressApplicationTitle` prevents Claude from overwriting it.
 - **Tab colors**: Persistent per-project colors from a 10-color earth-tone palette, stored in `~/.claude/context-reset/color-map.json`.
+- **Focus preservation**: Saves/restores foreground window on Windows so the new tab doesn't steal focus.
 - **Safety**: Won't kill a shell that owns multiple Claude processes.
 - **Session state handoff**: Before launching the new tab, reads the last ~500 JSONL lines from the transcript (efficient reverse-read, no full file load), parses them into clean readable conversation text (user messages, Claude responses, tool summaries, hook firings, boundaries), and writes `SESSION_STATE.md` capped at ~8K tokens so the next session can actually read it.
 
