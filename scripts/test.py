@@ -301,7 +301,7 @@ with tempfile.TemporaryDirectory() as d:
         # Test title sanitization (quotes stripped)
         cmd3 = context_reset.build_launch_cmd(d, "p", 'title "with" quotes', "#000000")
         test("strips quotes from title", '"with"' not in cmd3 and "title with quotes" in cmd3)
-        test("suppresses app title override", "--suppressApplicationTitle" in cmd)
+        test("allows Claude status icon (no suppressApplicationTitle)", "--suppressApplicationTitle" not in cmd)
     elif context_reset.IS_MAC:
         test("contains osascript", "osascript" in cmd)
         test("contains prompt", "test prompt" in cmd)

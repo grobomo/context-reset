@@ -773,7 +773,6 @@ def build_launch_cmd(project_dir, prompt, tab_title, tab_color):
         safe_title = tab_title.replace('"', '').replace("'", "")
         return (
             f'wt new-tab --title "{safe_title}" '
-            f'--suppressApplicationTitle '
             f'--tabColor "{tab_color}" '
             f'--startingDirectory "{project_dir}" '
             f"powershell -NoExit -Command \"claude '{ps_escaped}'\""
