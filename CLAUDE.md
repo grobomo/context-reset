@@ -24,7 +24,7 @@ The prompt tells the new session to read SESSION_STATE.md (transcript context) a
 
 - **Two-phase verification**: Process count alone is unreliable (multiple Claude instances). Transcript file activity confirms the new session is actually working.
 - **Detached kill on Windows**: `taskkill /T` would kill us too, so the kill runs in a detached Python subprocess.
-- **Tab title**: Always the folder name (short, stable). `--suppressApplicationTitle` prevents Claude from overwriting it.
+- **Tab title**: Set to folder name via OSC escape sequence (`\033]0;name\007`) from hooks in `~/.claude/hooks/set-tab-title.sh`. Fires on session start (Notification hook) and after every tool use (PostToolUse hook) to reassert after Claude overwrites. Claude's green status icon still works since we don't use `--suppressApplicationTitle`.
 - **Tab colors**: Persistent per-project colors from a 10-color earth-tone palette, stored in `~/.claude/context-reset/color-map.json`.
 - **Focus preservation**: Saves/restores foreground window on Windows so the new tab doesn't steal focus.
 - **Safety**: Won't kill a shell that owns multiple Claude processes.

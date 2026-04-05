@@ -86,4 +86,4 @@
 - [x] T002: Add task_claims.py tests (35 tests)
 - [x] T003: Commit task_claims.py with tests
 - [ ] T004: Test Notification hook tab title (set-tab-title.sh via OSC stderr) — verify in next session
-- [ ] T005: If T004 works, add PostToolUse hook to reassert title after Claude overwrites it
+- [x] T005: Add PostToolUse catch-all hook to reassert title after Claude overwrites it
