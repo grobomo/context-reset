@@ -9,7 +9,6 @@ is a full drop-in for `import new_session`.
 """
 
 import new_session as _ns
-import sys as _sys
 
 # Re-export ALL names from new_session (including _private ones)
 # so tests and hooks that do `context_reset._tail_lines` still work.
