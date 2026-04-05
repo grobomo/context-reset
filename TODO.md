@@ -85,5 +85,5 @@
 - [x] T001: Tab UX improvements — no focus steal, folder name title, suppressApplicationTitle
 - [x] T002: Add task_claims.py tests (35 tests)
 - [x] T003: Commit task_claims.py with tests
-- [ ] T004: Test Notification hook tab title (set-tab-title.sh via OSC stderr) — verify in next session
-- [x] T005: Add PostToolUse catch-all hook to reassert title after Claude overwrites it
+- [ ] T004: Test Notification start hook (set-tab-title.sh via OSC stderr) — sets folder name before Claude starts
+- [x] T005: Removed PostToolUse reassertion — would kill Claude's green status icon. Tab color identifies project instead.
