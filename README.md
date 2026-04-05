@@ -51,9 +51,9 @@ python context_reset.py --timeout 60
 
 Each new tab gets:
 
-- **Title**: The project folder name — short, stable, and locked with `--suppressApplicationTitle` so Claude can't overwrite it.
-- **Color**: A persistent per-project color from a 10-color palette. All tabs for the same project share the same color. Colors are stored in `~/.claude/context-reset/color-map.json` and auto-rotate through unused slots.
-- **Focus**: New tabs don't steal focus — the script saves and restores the foreground window (Windows).
+- **Title**: Set to the project folder name via `wt --title` on tab creation. Claude Code overwrites with its status icon during the session (this is desirable -- shows working/idle state).
+- **Color**: A persistent per-project color from a 10-color palette. All tabs for the same project share the same color. Colors are stored in `~/.claude/context-reset/color-map.json` and auto-rotate through unused slots. This is the primary project identifier.
+- **Focus**: New tabs don't steal focus -- the script saves and restores the foreground window (Windows).
 
 ## Integration with Claude Code hooks
 
