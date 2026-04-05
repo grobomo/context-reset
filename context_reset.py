@@ -128,24 +128,6 @@ def get_tab_color(project_dir):
 
 # ============ Helpers ============
 
-def get_first_todo(project_dir):
-    """Return the first unchecked TODO item text, or None."""
-    todo = os.path.join(project_dir, "TODO.md")
-    if not os.path.exists(todo):
-        return None
-    try:
-        with open(todo, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if line.startswith("- [ ]"):
-                    text = line[5:].strip()
-                    if len(text) > 50:
-                        text = text[:47] + "..."
-                    return text
-    except Exception:
-        pass
-    return None
-
 
 def _tail_lines(filepath, max_lines=500, chunk_size=65536):
     """Read the last N lines from a file efficiently without loading the whole file.

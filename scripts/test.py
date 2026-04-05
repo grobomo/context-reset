@@ -182,20 +182,6 @@ with tempfile.TemporaryDirectory() as d:
     test("integration: not raw JSON", not ctx.strip().startswith('{'))
     context_reset.get_project_logs_dir = orig_fn2
 
-# --- get_first_todo ---
-print("\n=== get_first_todo ===")
-with tempfile.TemporaryDirectory() as d:
-    test("no TODO.md -> None", context_reset.get_first_todo(d) is None)
-    with open(os.path.join(d, "TODO.md"), "w") as f:
-        f.write("# tasks\n- [x] Done item\n- [ ] First open item\n- [ ] Second open\n")
-    test("finds first unchecked item", context_reset.get_first_todo(d) == "First open item")
-    with open(os.path.join(d, "TODO.md"), "w") as f:
-        f.write("# tasks\n- [x] All done\n")
-    test("all checked -> None", context_reset.get_first_todo(d) is None)
-    with open(os.path.join(d, "TODO.md"), "w") as f:
-        f.write("- [ ] " + "A" * 60 + "\n")
-    result = context_reset.get_first_todo(d)
-    test("long item truncated to 50", result is not None and len(result) <= 50 and result.endswith("..."))
 
 # --- get_tab_color ---
 print("\n=== get_tab_color ===")
@@ -315,6 +301,7 @@ with tempfile.TemporaryDirectory() as d:
         # Test title sanitization (quotes stripped)
         cmd3 = context_reset.build_launch_cmd(d, "p", 'title "with" quotes', "#000000")
         test("strips quotes from title", '"with"' not in cmd3 and "title with quotes" in cmd3)
+        test("suppresses app title override", "--suppressApplicationTitle" in cmd)
     elif context_reset.IS_MAC:
         test("contains osascript", "osascript" in cmd)
         test("contains prompt", "test prompt" in cmd)
