@@ -85,5 +85,5 @@
 - [x] T001: Tab UX improvements — no focus steal, folder name title, suppressApplicationTitle
 - [x] T002: Add task_claims.py tests (35 tests)
 - [x] T003: Commit task_claims.py with tests
-- [ ] T004: Test Notification start hook (set-tab-title.sh via OSC stderr) — sets folder name before Claude starts. Hook is in ~/.claude/settings.json (Notification start) and script at ~/.claude/hooks/set-tab-title.sh. Just check if the tab title shows folder name briefly on session start.
+- [x] T004: Tested Notification start hook — DOES NOT WORK. Hook stderr is captured by Claude Code, not passed to terminal. OSC sequence shows as text `]0;context-reset` in output. Removed hook. Tab color is the persistent project identifier; `wt --title` sets initial title before Claude takes over.
 - [x] T005: Removed PostToolUse reassertion — would kill Claude's green status icon. Tab color identifies project instead.
