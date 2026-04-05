@@ -1,10 +1,11 @@
-# context-reset
+# context-reset (new-session)
 
-Autonomous Claude Code context reset. When context gets heavy, launches a fresh Claude session in a new terminal tab, verifies it's working, then kills the old tab.
+Launch a new Claude Code session in any project. Context reset (same project) or project switch (different project). Launches a fresh Claude session in a new terminal tab, verifies it's working, then kills the old tab.
 
 ## Architecture
 
-Single file: `context_reset.py`. No dependencies beyond Python stdlib.
+Main file: `new_session.py`. No dependencies beyond Python stdlib.
+`context_reset.py` is a backward-compat alias that re-exports everything from `new_session.py`.
 
 - **Phase 1**: Launch new terminal tab with `claude '<prompt>'`
 - **Phase 1b**: Wait for new Claude process (process count check, 15s timeout)
@@ -15,7 +16,7 @@ Single file: `context_reset.py`. No dependencies beyond Python stdlib.
 
 Called by hook-runner's `auto-continue.js` stop module:
 ```
-python C:/Users/joelg/Documents/ProjectsCL1/context-reset/context_reset.py --project-dir $CLAUDE_PROJECT_DIR
+python C:/Users/joelg/Documents/ProjectsCL1/context-reset/new_session.py --project-dir $CLAUDE_PROJECT_DIR
 ```
 
 The prompt tells the new session to read SESSION_STATE.md (transcript context) and TODO.md.
@@ -33,6 +34,6 @@ The prompt tells the new session to read SESSION_STATE.md (transcript context) a
 ## Testing
 
 ```bash
-python scripts/test.py    # 60 tests
-python context_reset.py --project-dir . --dry-run   # verify command without executing
+python scripts/test.py    # 62 tests
+python new_session.py --project-dir . --dry-run   # verify command without executing
 ```

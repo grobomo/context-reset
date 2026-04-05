@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for context_reset.py -- run with: python scripts/test.py"""
+"""Tests for new_session.py -- run with: python scripts/test.py"""
 
 import os
 import sys
@@ -8,7 +8,7 @@ import tempfile
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import context_reset
+import new_session as context_reset
 
 PASS = 0
 FAIL = 0
