@@ -704,6 +704,45 @@ def _find_shell_pid_windows():
                         break
 
     if tab_shell is None:
+        # Final fallback: targeted PowerShell query for just our ancestor chain.
+        # The process table from wmic can be incomplete under heavy load (10+ tabs),
+        # causing the chain walk to terminate early. This queries each ancestor
+        # individually via Get-CimInstance, which is slower but reliable.
+        log("  trying targeted PowerShell ancestor walk")
+        try:
+            ps_script = (
+                f"$p={os.getpid()};"
+                "for($i=0;$i -lt 25;$i++){"
+                "$proc=Get-CimInstance Win32_Process -Filter \"ProcessId=$p\" -ErrorAction SilentlyContinue;"
+                "if(-not $proc){break}"
+                "\"$($proc.ProcessId)|$($proc.ParentProcessId)|$($proc.Name)\";"
+                "$p=$proc.ParentProcessId;"
+                "if($p -eq 0){break}}"
+            )
+            out = subprocess.check_output(
+                ['powershell', '-NoProfile', '-Command', ps_script],
+                encoding='utf-8', timeout=15, startupinfo=_si(),
+                stderr=subprocess.DEVNULL
+            )
+            ps_chain = []
+            for line in out.strip().splitlines():
+                parts = line.strip().split('|', 2)
+                if len(parts) == 3:
+                    try:
+                        ps_chain.append((int(parts[0]), parts[2].lower()))
+                    except ValueError:
+                        pass
+            log(f"  PS chain: {[(p, n) for p, n in ps_chain]}")
+            for i, (cpid, name) in enumerate(ps_chain):
+                if name in shell_names and i + 1 < len(ps_chain):
+                    if ps_chain[i + 1][1] in terminal_hosts:
+                        tab_shell = cpid
+                        log(f"  PS fallback found: PID {cpid} ({name}), parent {ps_chain[i + 1]}")
+                        break
+        except Exception as e:
+            log(f"  PS fallback failed: {e}")
+
+    if tab_shell is None:
         log("  all methods failed to find tab shell PID")
         return None
 
