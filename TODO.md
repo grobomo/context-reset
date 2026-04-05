@@ -83,5 +83,5 @@
 ## Quick Start Guide (006)
 
 - [x] T001: Tab UX improvements — no focus steal, folder name title, suppressApplicationTitle
-- [ ] T002: Add task_claims.py tests
-- [ ] T003: Commit task_claims.py with tests
+- [x] T002: Add task_claims.py tests (35 tests)
+- [x] T003: Commit task_claims.py with tests
