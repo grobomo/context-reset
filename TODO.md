@@ -88,13 +88,22 @@
 - [x] T004: Tested Notification start hook — DOES NOT WORK. Hook stderr is captured by Claude Code, not passed to terminal. OSC sequence shows as text `]0;context-reset` in output. Removed hook. Tab color is the persistent project identifier; `wt --title` sets initial title before Claude takes over.
 - [x] T005: Removed PostToolUse reassertion — would kill Claude's green status icon. Tab color identifies project instead.
 
+## Pre-trust workspace (015)
+
+Skip the "do you trust this folder?" dialog on first launch in new directories.
+Claude Code stores trust state in `~/.claude/projects/<slug>/`. Pre-creating that
+directory before launching the interactive session bypasses the dialog.
+
+- [x] T001: Add `ensure_workspace_trusted()` to new_session.py — pre-creates projects dir. Also fixed `get_project_logs_dir` slug encoding to match Claude Code (regex `[^a-zA-Z0-9-]` instead of only replacing `\/:.`)
+- [ ] T002: Add tests for ensure_workspace_trusted and fixed slug encoding
+
 ## Rename: context-reset → new-session (007)
 
 The name "context-reset" confuses Claude into thinking this is only for resetting context in the current project. It's actually for opening a new Claude Code session in ANY project (same or different). Rename to make the purpose clear.
 
-- [ ] T001: Create `new_session.py` (copy of `context_reset.py` with updated docstring/naming)
-- [ ] T002: Update stop-message.txt to reference `new_session.py` instead of `context_reset.py`
-- [ ] T003: Add explicit "switch project" usage example to stop-message.txt: `python new_session.py --project-dir /path/to/other/project`
-- [ ] T004: Update all hook module references (auto-continue.js, load-instructions.js, etc.)
-- [ ] T005: Keep `context_reset.py` as backward-compat alias (imports and calls new_session.py)
-- [ ] T006: Update README.md and CLAUDE.md with new naming
+- [x] T001: Create `new_session.py` (copy of `context_reset.py` with updated docstring/naming)
+- [x] T002: Update stop-message.txt to reference `new_session.py` instead of `context_reset.py`
+- [x] T003: Add explicit "switch project" usage example to stop-message.txt
+- [x] T004: Update all hook module references (auto-continue.js, cwd-drift-detector.js)
+- [x] T005: Keep `context_reset.py` as backward-compat alias (re-exports all names from new_session.py)
+- [x] T006: Update README.md, CLAUDE.md, and project rules with new naming

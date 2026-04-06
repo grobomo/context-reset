@@ -206,6 +206,28 @@ logs_dir = context_reset.get_project_logs_dir("C:/Users/test/project")
 test("logs dir is under .claude/projects", ".claude" in logs_dir and "projects" in logs_dir)
 test("no colons in slug", ":" not in os.path.basename(logs_dir))
 
+# Encoding: all non-alphanumeric-dash chars become -
+with tempfile.TemporaryDirectory() as d:
+    test_proj = os.path.join(d, "_my.project")
+    os.makedirs(test_proj)
+    slug = os.path.basename(context_reset.get_project_logs_dir(test_proj))
+    test("underscores replaced with -", "_" not in slug)
+    test("dots replaced with -", "." not in slug)
+    test("slug preserves hyphens", "my-project" in slug)
+
+# --- ensure_workspace_trusted ---
+print("\n=== ensure_workspace_trusted ===")
+with tempfile.TemporaryDirectory() as d:
+    fake_proj = os.path.join(d, "fake-project")
+    os.makedirs(fake_proj)
+    logs_dir = context_reset.get_project_logs_dir(fake_proj)
+    test("dir does not exist before trust", not os.path.exists(logs_dir))
+    context_reset.ensure_workspace_trusted(fake_proj)
+    test("dir exists after trust", os.path.exists(logs_dir))
+    # Second call is a no-op (no error)
+    context_reset.ensure_workspace_trusted(fake_proj)
+    test("idempotent (no error on second call)", os.path.exists(logs_dir))
+
 # --- get_newest_jsonl ---
 print("\n=== get_newest_jsonl ===")
 with tempfile.TemporaryDirectory() as d:
