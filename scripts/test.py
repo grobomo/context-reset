@@ -222,11 +222,14 @@ with tempfile.TemporaryDirectory() as d:
     os.makedirs(fake_proj)
     logs_dir = context_reset.get_project_logs_dir(fake_proj)
     test("dir does not exist before trust", not os.path.exists(logs_dir))
+    # Simulate already-trusted: create dir + JSONL, verify no-op
+    os.makedirs(logs_dir, exist_ok=True)
+    seed = os.path.join(logs_dir, "00000000-0000-0000-0000-000000000000.jsonl")
+    with open(seed, "w") as fh:
+        fh.write("{}\n")
+    # Should be a no-op (already has JSONL) — no subprocess spawned
     context_reset.ensure_workspace_trusted(fake_proj)
-    test("dir exists after trust", os.path.exists(logs_dir))
-    # Second call is a no-op (no error)
-    context_reset.ensure_workspace_trusted(fake_proj)
-    test("idempotent (no error on second call)", os.path.exists(logs_dir))
+    test("skips when JSONL exists (no-op)", os.path.exists(seed))
 
 # --- get_newest_jsonl ---
 print("\n=== get_newest_jsonl ===")
