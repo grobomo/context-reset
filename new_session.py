@@ -952,10 +952,27 @@ def _kill_old_tab_unix(shell_pid):
 
 def get_project_logs_dir(project_dir):
     home = os.path.expanduser("~")
-    slug = os.path.abspath(project_dir).replace("\\", "-").replace("/", "-").replace(":", "-").replace(".", "-")
+    slug = re.sub(r'[^a-zA-Z0-9-]', '-', os.path.abspath(project_dir))
     if slug.startswith("-"):
         slug = slug[1:]
     return os.path.join(home, ".claude", "projects", slug)
+
+
+def ensure_workspace_trusted(project_dir):
+    """Pre-create the Claude Code projects directory so the trust dialog is skipped.
+
+    Claude Code shows "Is this a project you trust?" on first interactive launch
+    in a new directory. Trust state = existence of ~/.claude/projects/<slug>/.
+    Pre-creating the directory with a seed JSONL avoids the prompt.
+    """
+    logs_dir = get_project_logs_dir(project_dir)
+    if os.path.exists(logs_dir):
+        return  # Already trusted
+    try:
+        os.makedirs(logs_dir, exist_ok=True)
+        log(f"Pre-trusted workspace: {logs_dir}")
+    except Exception as e:
+        log(f"WARNING: could not pre-trust workspace: {e}")
 
 
 def get_newest_jsonl(logs_dir):
@@ -1103,14 +1120,9 @@ def main():
         _remove_lock()
         return
 
-    # NOTE: Claude Code's "Do you trust this folder?" dialog fires on every
-    # new interactive session. There is NO way to pre-trust a directory —
-    # no settings.json field, no CLI flag, no env var. claude -p skips it
-    # only for non-interactive mode. Multiple open feature requests:
-    # https://github.com/anthropics/claude-code/issues/12737 (trustedDirectories)
-    # https://github.com/anthropics/claude-code/issues/29285 (permanent trust)
-    # Until Anthropic adds this, cross-project resets to new dirs require
-    # the user to press Enter once on the trust dialog.
+    # Pre-trust the workspace so the interactive session skips the
+    # "do you trust this folder?" dialog.
+    ensure_workspace_trusted(launch_dir)
 
     # Phase 1: Launch new tab
     before = count_claude_processes()
