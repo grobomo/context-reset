@@ -95,6 +95,7 @@ Claude Code stores trust state in `~/.claude/projects/<slug>/`. Pre-creating tha
 directory before launching the interactive session bypasses the dialog.
 
 - [x] T001: Add `ensure_workspace_trusted()` to new_session.py — pre-creates projects dir. Also fixed `get_project_logs_dir` slug encoding to match Claude Code (regex `[^a-zA-Z0-9-]` instead of only replacing `\/:.`)
+- [ ] T002: Add tests for ensure_workspace_trusted and fixed slug encoding
 
 ## Rename: context-reset → new-session (007)
 
