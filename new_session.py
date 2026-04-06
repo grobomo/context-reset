@@ -959,39 +959,35 @@ def get_project_logs_dir(project_dir):
 
 
 def ensure_workspace_trusted(project_dir):
-    """Run a minimal `claude -p` session to establish workspace trust.
+    """Write trust state to ~/.claude.json so the trust dialog is skipped.
 
     Claude Code shows "Is this a project you trust?" on first interactive launch
-    in a new directory. The -p (print) flag skips the trust dialog and creates
-    the proper trust state (project dir + session JSONL). Subsequent interactive
-    launches in the same directory won't prompt.
+    in a new directory. Trust state is stored in ~/.claude.json under
+    projects[path].hasTrustDialogAccepted. Writing this flag directly skips
+    the dialog instantly with no subprocess or API call.
 
-    No-ops if the project already has a session file.
+    No-ops if the project is already trusted.
     """
-    logs_dir = get_project_logs_dir(project_dir)
-    if os.path.exists(logs_dir):
-        # Check for at least one JSONL session file (dir alone isn't enough)
-        jsonls = [f for f in os.listdir(logs_dir) if f.endswith('.jsonl')]
-        if jsonls:
-            return  # Already trusted with a real session
+    config_path = os.path.join(os.path.expanduser("~"), ".claude.json")
+    # Normalize to forward slashes — Claude Code uses this format on Windows
+    project_key = os.path.abspath(project_dir).replace("\\", "/")
     try:
-        log(f"Pre-trusting workspace via claude -p in {project_dir}")
-        cmd = ['claude', '-p', 'ok', '--dangerously-skip-permissions']
-        result = subprocess.run(
-            cmd, cwd=project_dir, timeout=30,
-            capture_output=True, text=True,
-            startupinfo=_si(),
-        )
-        if result.returncode == 0:
-            log("Pre-trust complete")
-        else:
-            log(f"WARNING: pre-trust claude -p returned {result.returncode}")
-    except subprocess.TimeoutExpired:
-        log("WARNING: pre-trust claude -p timed out after 30s")
-    except FileNotFoundError:
-        log("WARNING: claude binary not found, cannot pre-trust")
+        config = {}
+        if os.path.exists(config_path):
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+        projects = config.setdefault("projects", {})
+        entry = projects.setdefault(project_key, {})
+        if entry.get("hasTrustDialogAccepted"):
+            return  # Already trusted
+        entry["hasTrustDialogAccepted"] = True
+        entry.setdefault("allowedTools", [])
+        entry.setdefault("hasCompletedProjectOnboarding", True)
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
+        log(f"Pre-trusted workspace in ~/.claude.json: {project_key}")
     except Exception as e:
-        log(f"WARNING: pre-trust failed: {e}")
+        log(f"WARNING: could not pre-trust workspace: {e}")
 
 
 def get_newest_jsonl(logs_dir):

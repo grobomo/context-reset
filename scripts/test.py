@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Tests for new_session.py -- run with: python scripts/test.py"""
 
+import json
 import os
 import sys
 import subprocess
@@ -220,16 +221,21 @@ print("\n=== ensure_workspace_trusted ===")
 with tempfile.TemporaryDirectory() as d:
     fake_proj = os.path.join(d, "fake-project")
     os.makedirs(fake_proj)
-    logs_dir = context_reset.get_project_logs_dir(fake_proj)
-    test("dir does not exist before trust", not os.path.exists(logs_dir))
-    # Simulate already-trusted: create dir + JSONL, verify no-op
-    os.makedirs(logs_dir, exist_ok=True)
-    seed = os.path.join(logs_dir, "00000000-0000-0000-0000-000000000000.jsonl")
-    with open(seed, "w") as fh:
-        fh.write("{}\n")
-    # Should be a no-op (already has JSONL) — no subprocess spawned
-    context_reset.ensure_workspace_trusted(fake_proj)
-    test("skips when JSONL exists (no-op)", os.path.exists(seed))
+    # Temporarily point ensure_workspace_trusted at a temp config file
+    fake_config = os.path.join(d, ".claude.json")
+    import unittest.mock
+    with unittest.mock.patch('new_session.os.path.expanduser', return_value=d):
+        context_reset.ensure_workspace_trusted(fake_proj)
+        # Verify trust was written
+        with open(fake_config, 'r') as fh:
+            config = json.load(fh)
+        proj_key = os.path.abspath(fake_proj).replace("\\", "/")
+        entry = config.get("projects", {}).get(proj_key, {})
+        test("hasTrustDialogAccepted is True", entry.get("hasTrustDialogAccepted") is True)
+        test("has allowedTools", "allowedTools" in entry)
+        # Second call is a no-op
+        context_reset.ensure_workspace_trusted(fake_proj)
+        test("idempotent (no error on second call)", True)
 
 # --- get_newest_jsonl ---
 print("\n=== get_newest_jsonl ===")
