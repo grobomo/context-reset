@@ -237,6 +237,25 @@ with tempfile.TemporaryDirectory() as d:
         context_reset.ensure_workspace_trusted(fake_proj)
         test("idempotent (no error on second call)", True)
 
+        # Parent trust walk: trust parent, child should be skipped
+        child_proj = os.path.join(fake_proj, "sub", "deep")
+        os.makedirs(child_proj)
+        # fake_proj is already trusted — child should inherit
+        context_reset.ensure_workspace_trusted(child_proj)
+        with open(fake_config, 'r') as fh:
+            config2 = json.load(fh)
+        child_key = os.path.abspath(child_proj).replace("\\", "/")
+        test("parent trust skips child write", child_key not in config2.get("projects", {}))
+
+        # Untrusted path (outside fake_proj) should get written
+        other_proj = os.path.join(d, "other-project")
+        os.makedirs(other_proj)
+        context_reset.ensure_workspace_trusted(other_proj)
+        with open(fake_config, 'r') as fh:
+            config3 = json.load(fh)
+        other_key = os.path.abspath(other_proj).replace("\\", "/")
+        test("untrusted path gets written", other_key in config3.get("projects", {}))
+
 # --- get_newest_jsonl ---
 print("\n=== get_newest_jsonl ===")
 with tempfile.TemporaryDirectory() as d:

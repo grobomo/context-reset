@@ -7,6 +7,7 @@ Launch a new Claude Code session in any project. Context reset (same project) or
 Main file: `new_session.py`. No dependencies beyond Python stdlib.
 `context_reset.py` is a backward-compat alias that re-exports everything from `new_session.py`.
 
+- **Pre-trust**: Checks `~/.claude.json` for workspace trust. Claude Code walks parent directories, so a trusted parent (e.g. `~/Documents/ProjectsCL1`) covers all children. Only writes a new entry if no ancestor is trusted.
 - **Phase 1**: Launch new terminal tab with `claude '<prompt>'`
 - **Phase 1b**: Wait for new Claude process (process count check, 15s timeout)
 - **Phase 2**: Verify new session is active (transcript file growth, configurable timeout)
@@ -34,6 +35,6 @@ The prompt tells the new session to read SESSION_STATE.md (transcript context) a
 ## Testing
 
 ```bash
-python scripts/test.py    # 62 tests
+python scripts/test.py    # 70 tests
 python new_session.py --project-dir . --dry-run   # verify command without executing
 ```
