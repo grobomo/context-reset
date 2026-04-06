@@ -100,7 +100,7 @@ directory before launching the interactive session bypasses the dialog.
 - [x] T004: Fix pretrust v2 — trust is stored in `~/.claude.json` projects[path].hasTrustDialogAccepted, write it directly (PR #17 merged)
 - [x] T005: Verified — pretrust-test tab launched WITHOUT trust dialog. Feature works end-to-end.
 - [x] T006: Parent trust walk — check parent dirs before writing per-project entries, update CLAUDE.md docs (70 tests)
-- [ ] T007: Add `--stop` flag to new_session.py — kills current tab without launching a new one
+- [x] T007: Add `--stop` flag to new_session.py — kills current tab without launching a new one (PR #19)
 
 ## Rename: context-reset → new-session (007)
 
