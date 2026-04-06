@@ -959,20 +959,39 @@ def get_project_logs_dir(project_dir):
 
 
 def ensure_workspace_trusted(project_dir):
-    """Pre-create the Claude Code projects directory so the trust dialog is skipped.
+    """Run a minimal `claude -p` session to establish workspace trust.
 
     Claude Code shows "Is this a project you trust?" on first interactive launch
-    in a new directory. Trust state = existence of ~/.claude/projects/<slug>/.
-    Pre-creating the directory with a seed JSONL avoids the prompt.
+    in a new directory. The -p (print) flag skips the trust dialog and creates
+    the proper trust state (project dir + session JSONL). Subsequent interactive
+    launches in the same directory won't prompt.
+
+    No-ops if the project already has a session file.
     """
     logs_dir = get_project_logs_dir(project_dir)
     if os.path.exists(logs_dir):
-        return  # Already trusted
+        # Check for at least one JSONL session file (dir alone isn't enough)
+        jsonls = [f for f in os.listdir(logs_dir) if f.endswith('.jsonl')]
+        if jsonls:
+            return  # Already trusted with a real session
     try:
-        os.makedirs(logs_dir, exist_ok=True)
-        log(f"Pre-trusted workspace: {logs_dir}")
+        log(f"Pre-trusting workspace via claude -p in {project_dir}")
+        cmd = ['claude', '-p', 'ok', '--dangerously-skip-permissions']
+        result = subprocess.run(
+            cmd, cwd=project_dir, timeout=30,
+            capture_output=True, text=True,
+            startupinfo=_si(),
+        )
+        if result.returncode == 0:
+            log("Pre-trust complete")
+        else:
+            log(f"WARNING: pre-trust claude -p returned {result.returncode}")
+    except subprocess.TimeoutExpired:
+        log("WARNING: pre-trust claude -p timed out after 30s")
+    except FileNotFoundError:
+        log("WARNING: claude binary not found, cannot pre-trust")
     except Exception as e:
-        log(f"WARNING: could not pre-trust workspace: {e}")
+        log(f"WARNING: pre-trust failed: {e}")
 
 
 def get_newest_jsonl(logs_dir):
