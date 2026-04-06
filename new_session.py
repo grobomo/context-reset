@@ -963,10 +963,10 @@ def ensure_workspace_trusted(project_dir):
 
     Claude Code shows "Is this a project you trust?" on first interactive launch
     in a new directory. Trust state is stored in ~/.claude.json under
-    projects[path].hasTrustDialogAccepted. Writing this flag directly skips
-    the dialog instantly with no subprocess or API call.
+    projects[path].hasTrustDialogAccepted. Claude Code walks parent directories
+    when checking trust, so a trusted parent covers all children.
 
-    No-ops if the project is already trusted.
+    No-ops if the project or any parent directory is already trusted.
     """
     config_path = os.path.join(os.path.expanduser("~"), ".claude.json")
     # Normalize to forward slashes — Claude Code uses this format on Windows
@@ -976,13 +976,23 @@ def ensure_workspace_trusted(project_dir):
         if os.path.exists(config_path):
             with open(config_path, 'r', encoding='utf-8') as f:
                 config = json.load(f)
-        projects = config.setdefault("projects", {})
-        entry = projects.setdefault(project_key, {})
-        if entry.get("hasTrustDialogAccepted"):
-            return  # Already trusted
-        entry["hasTrustDialogAccepted"] = True
-        entry.setdefault("allowedTools", [])
-        entry.setdefault("hasCompletedProjectOnboarding", True)
+        projects = config.get("projects", {})
+        # Check if this exact path or any parent is already trusted
+        check = project_key
+        while True:
+            entry = projects.get(check, {})
+            if entry.get("hasTrustDialogAccepted"):
+                return  # Already trusted (exact match or parent)
+            parent = check.rsplit("/", 1)[0] if "/" in check else ""
+            if not parent or parent == check:
+                break
+            check = parent
+        # Not trusted — write entry for this project
+        projects_mut = config.setdefault("projects", {})
+        new_entry = projects_mut.setdefault(project_key, {})
+        new_entry["hasTrustDialogAccepted"] = True
+        new_entry.setdefault("allowedTools", [])
+        new_entry.setdefault("hasCompletedProjectOnboarding", True)
         with open(config_path, 'w', encoding='utf-8') as f:
             json.dump(config, f, indent=2, ensure_ascii=False)
         log(f"Pre-trusted workspace in ~/.claude.json: {project_key}")
