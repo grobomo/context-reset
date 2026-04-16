@@ -1012,6 +1012,11 @@ def get_newest_jsonl(logs_dir):
 
 
 def verify_claude_working(project_dir, timeout=45):
+    """Verify new Claude session is working by watching transcript logs.
+
+    Returns the path to the new/active JSONL file on success, or None on timeout.
+    The returned path is truthy, so callers using `if verify_claude_working(...)` still work.
+    """
     logs_dir = get_project_logs_dir(project_dir)
     baseline_file, baseline_size = get_newest_jsonl(logs_dir)
     log(f"Phase 2: watching transcript logs in {logs_dir}")
@@ -1022,13 +1027,34 @@ def verify_claude_working(project_dir, timeout=45):
 
         if current_file and current_file != baseline_file:
             log(f"Verified: new session transcript detected ({os.path.basename(current_file)})")
-            return True
+            return current_file
 
         if current_file and current_size > baseline_size:
             log(f"Verified: transcript growing (+{current_size - baseline_size} bytes)")
-            return True
+            return current_file
 
-    return False
+    return None
+
+
+def record_session_chain(project_dir, old_jsonl, new_jsonl):
+    """Append an old->new session transition record to session-chain.jsonl.
+
+    Enables chat-export to stitch context-reset jumps into a continuous narrative.
+    """
+    if not old_jsonl and not new_jsonl:
+        return
+    logs_dir = get_project_logs_dir(project_dir)
+    os.makedirs(logs_dir, exist_ok=True)
+    chain_file = os.path.join(logs_dir, "session-chain.jsonl")
+    record = {
+        "old_session": os.path.basename(old_jsonl) if old_jsonl else None,
+        "new_session": os.path.basename(new_jsonl) if new_jsonl else None,
+        "project_dir": os.path.abspath(project_dir),
+        "timestamp": datetime.now().isoformat(),
+    }
+    with open(chain_file, "a", encoding="utf-8") as f:
+        f.write(json.dumps(record) + "\n")
+    log(f"Recorded session chain: {record['old_session']} -> {record['new_session']}")
 
 
 # ============ Main ============
@@ -1212,10 +1238,15 @@ def main():
         _remove_lock()
         return
 
+    # Capture old session JSONL before verify (for chain recording)
+    old_jsonl, _ = get_newest_jsonl(get_project_logs_dir(launch_dir))
+
     # Phase 2: Verify working (check target project's logs, not source)
-    working = verify_claude_working(launch_dir, timeout=args.timeout)
-    if working:
+    new_jsonl = verify_claude_working(launch_dir, timeout=args.timeout)
+    if new_jsonl:
         log("New Claude confirmed working")
+        # Record the session chain for chat-export stitching
+        record_session_chain(launch_dir, old_jsonl, new_jsonl)
         shell_pid = find_shell_pid()
         if shell_pid:
             log(f"Closing old tab (shell PID {shell_pid})")
