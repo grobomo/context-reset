@@ -308,11 +308,11 @@ with tempfile.TemporaryDirectory() as d:
     t.start()
     result = context_reset.verify_claude_working(fake_project, timeout=5)
     t.join()
-    test("detects new transcript file", result is True)
+    test("detects new transcript file", result is not None and "session-new.jsonl" in result)
 
     # Simulate: no new activity within timeout
     result2 = context_reset.verify_claude_working(fake_project, timeout=2)
-    test("times out when no new activity", result2 is False)
+    test("times out when no new activity", result2 is None)
 
     # Simulate: existing file grows
     existing = os.path.join(fake_logs, "session-grow.jsonl")
@@ -331,7 +331,7 @@ with tempfile.TemporaryDirectory() as d:
     t2.start()
     result3 = context_reset.verify_claude_working(fake_project, timeout=5)
     t2.join()
-    test("detects transcript growth", result3 is True)
+    test("detects transcript growth", result3 is not None and "session-grow.jsonl" in result3)
 
     context_reset.get_project_logs_dir = orig_fn
 
@@ -368,6 +368,58 @@ with tempfile.TemporaryDirectory() as d:
     )
     test("dry-run exits 0", result.returncode == 0)
     test("dry-run prints command", "DRY RUN" in result.stdout)
+
+# --- record_session_chain ---
+print("\n=== record_session_chain ===")
+with tempfile.TemporaryDirectory() as d:
+    fake_project = os.path.join(d, "chain-project")
+    os.makedirs(fake_project)
+    logs_slug = os.path.abspath(fake_project).replace("\\", "-").replace("/", "-").replace(":", "-")
+    if logs_slug.startswith("-"):
+        logs_slug = logs_slug[1:]
+    fake_logs = os.path.join(d, "dotclaude", "projects", logs_slug)
+    os.makedirs(fake_logs)
+
+    orig_fn = context_reset.get_project_logs_dir
+    context_reset.get_project_logs_dir = lambda proj: fake_logs
+
+    # Test: writes correct JSONL record
+    context_reset.record_session_chain(fake_project, "/logs/old-session.jsonl", "/logs/new-session.jsonl")
+    chain_file = os.path.join(fake_logs, "session-chain.jsonl")
+    test("creates session-chain.jsonl", os.path.exists(chain_file))
+    with open(chain_file) as fh:
+        lines = fh.readlines()
+    test("writes one JSONL line", len(lines) == 1)
+    record = json.loads(lines[0])
+    test("old_session is basename only", record["old_session"] == "old-session.jsonl")
+    test("new_session is basename only", record["new_session"] == "new-session.jsonl")
+    test("has project_dir", "chain-project" in record["project_dir"])
+    test("has timestamp", "T" in record["timestamp"])
+
+    # Test: appends (doesn't overwrite)
+    context_reset.record_session_chain(fake_project, "/logs/second-old.jsonl", "/logs/second-new.jsonl")
+    with open(chain_file) as fh:
+        lines = fh.readlines()
+    test("appends second record", len(lines) == 2)
+    record2 = json.loads(lines[1])
+    test("second record has correct old", record2["old_session"] == "second-old.jsonl")
+
+    # Test: handles None old_jsonl (first session in project)
+    context_reset.record_session_chain(fake_project, None, "/logs/first.jsonl")
+    with open(chain_file) as fh:
+        lines = fh.readlines()
+    test("handles None old_jsonl", len(lines) == 3)
+    record3 = json.loads(lines[2])
+    test("old_session is null when None", record3["old_session"] is None)
+    test("new_session still recorded", record3["new_session"] == "first.jsonl")
+
+    # Test: skips when both are None
+    context_reset.record_session_chain(fake_project, None, None)
+    with open(chain_file) as fh:
+        lines = fh.readlines()
+    test("skips when both None", len(lines) == 3)
+
+    context_reset.get_project_logs_dir = orig_fn
 
 # --- Summary ---
 print(f"\n{'='*40}")
