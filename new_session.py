@@ -206,6 +206,27 @@ def _tool_summary(name, inp):
         return f"{name}()"
 
 
+# Patterns that indicate a user message is pure boilerplate (hook/system noise)
+# and should be dropped entirely from SESSION_STATE.md
+_BOILERPLATE_PATTERNS = [
+    re.compile(r'^Stop hook feedback:\s*\nDO NOT STOP', re.MULTILINE),
+    re.compile(r'^You are a self-analysis agent\.'),
+    re.compile(r'SESSION START INSTRUCTIONS:'),
+    re.compile(r'^Context was reset\. Do not ask what to do\.'),
+]
+
+
+def _is_boilerplate_user_msg(text):
+    """Return True if the user message text is pure hook/system boilerplate."""
+    stripped = text.strip()
+    if not stripped:
+        return True
+    for pat in _BOILERPLATE_PATTERNS:
+        if pat.search(stripped):
+            return True
+    return False
+
+
 def _parse_and_render_tail(jsonl_lines, max_chars=32000):
     """Parse raw JSONL lines into readable conversation text.
 
@@ -268,6 +289,15 @@ def _parse_and_render_tail(jsonl_lines, max_chars=32000):
 
         if isinstance(content, str):
             content = [{"type": "text", "text": content}]
+
+        # Skip user messages that are pure boilerplate (hooks, system prompts)
+        if role == 'user':
+            raw_text = ' '.join(
+                b.get('text', '') for b in content
+                if isinstance(b, dict) and b.get('type') == 'text'
+            )
+            if _is_boilerplate_user_msg(raw_text):
+                continue
 
         # Format timestamp
         ts_short = ''
