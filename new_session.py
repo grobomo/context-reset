@@ -1017,12 +1017,19 @@ def ensure_workspace_trusted(project_dir):
             if not parent or parent == check:
                 break
             check = parent
-        # Not trusted — write entry for this project
+        # Not trusted — write full entry matching Claude Code's native format
         projects_mut = config.setdefault("projects", {})
         new_entry = projects_mut.setdefault(project_key, {})
         new_entry["hasTrustDialogAccepted"] = True
         new_entry.setdefault("allowedTools", [])
         new_entry.setdefault("hasCompletedProjectOnboarding", True)
+        new_entry.setdefault("mcpContextUris", [])
+        new_entry.setdefault("mcpServers", {})
+        new_entry.setdefault("enabledMcpjsonServers", [])
+        new_entry.setdefault("disabledMcpjsonServers", [])
+        new_entry.setdefault("projectOnboardingSeenCount", 0)
+        new_entry.setdefault("hasClaudeMdExternalIncludesApproved", False)
+        new_entry.setdefault("hasClaudeMdExternalIncludesWarningShown", False)
         with open(config_path, 'w', encoding='utf-8') as f:
             json.dump(config, f, indent=2, ensure_ascii=False)
         log(f"Pre-trusted workspace in ~/.claude.json: {project_key}")

@@ -265,6 +265,9 @@ with tempfile.TemporaryDirectory() as d:
         entry = config.get("projects", {}).get(proj_key, {})
         test("hasTrustDialogAccepted is True", entry.get("hasTrustDialogAccepted") is True)
         test("has allowedTools", "allowedTools" in entry)
+        test("has full native format (10 fields)", len(entry) == 10)
+        test("has mcpServers", "mcpServers" in entry)
+        test("has hasClaudeMdExternalIncludesApproved", "hasClaudeMdExternalIncludesApproved" in entry)
         # Second call is a no-op
         context_reset.ensure_workspace_trusted(fake_proj)
         test("idempotent (no error on second call)", True)
