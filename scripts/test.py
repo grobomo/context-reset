@@ -308,11 +308,11 @@ with tempfile.TemporaryDirectory() as d:
     t.start()
     result = context_reset.verify_claude_working(fake_project, timeout=5)
     t.join()
-    test("detects new transcript file", result is True)
+    test("detects new transcript file", result is not None and "session-new.jsonl" in result)
 
     # Simulate: no new activity within timeout
     result2 = context_reset.verify_claude_working(fake_project, timeout=2)
-    test("times out when no new activity", result2 is False)
+    test("times out when no new activity", result2 is None)
 
     # Simulate: existing file grows
     existing = os.path.join(fake_logs, "session-grow.jsonl")
@@ -331,7 +331,7 @@ with tempfile.TemporaryDirectory() as d:
     t2.start()
     result3 = context_reset.verify_claude_working(fake_project, timeout=5)
     t2.join()
-    test("detects transcript growth", result3 is True)
+    test("detects transcript growth", result3 is not None and "session-grow.jsonl" in result3)
 
     context_reset.get_project_logs_dir = orig_fn
 
