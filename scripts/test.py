@@ -154,6 +154,38 @@ boundary_entries = [
 ctx_boundary = context_reset._parse_and_render_tail(boundary_entries)
 test("boundary shown", "compacted" in ctx_boundary and "150,000" in ctx_boundary)
 
+# --- _is_boilerplate_user_msg ---
+print("\n=== _is_boilerplate_user_msg ===")
+test("empty is boilerplate", context_reset._is_boilerplate_user_msg(""))
+test("whitespace is boilerplate", context_reset._is_boilerplate_user_msg("   \n  "))
+test("stop hook is boilerplate", context_reset._is_boilerplate_user_msg(
+    "Stop hook feedback:\nDO NOT STOP. DO NOT SUMMARIZE. DO NOT LIST OPTIONS. Follow this order:\n1) Check TODO.md..."
+))
+test("self-analysis is boilerplate", context_reset._is_boilerplate_user_msg(
+    "You are a self-analysis agent. A user interrupted Claude mid-response."
+))
+test("session start is boilerplate", context_reset._is_boilerplate_user_msg(
+    "SESSION START INSTRUCTIONS: Check TODO.md in $CLAUDE_PROJECT_DIR for pending tasks."
+))
+test("context reset prompt is boilerplate", context_reset._is_boilerplate_user_msg(
+    "Context was reset. Do not ask what to do. Pick up where the last session left off."
+))
+test("real user message is NOT boilerplate", not context_reset._is_boilerplate_user_msg(
+    "please fix the bug in auth.py"
+))
+test("looks good is NOT boilerplate", not context_reset._is_boilerplate_user_msg("looks good"))
+
+# Test boilerplate filtering in _parse_and_render_tail
+boilerplate_entries = [
+    _json.dumps({"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": "Stop hook feedback:\nDO NOT STOP. DO NOT SUMMARIZE. keep going"}]}}),
+    _json.dumps({"type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "text": "Continuing work"}]}}),
+    _json.dumps({"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": "real feedback here"}]}}),
+]
+ctx_bp = context_reset._parse_and_render_tail(boilerplate_entries)
+test("boilerplate user msg filtered out", "DO NOT STOP" not in ctx_bp)
+test("real user msg kept", "real feedback here" in ctx_bp)
+test("assistant after boilerplate kept", "Continuing work" in ctx_bp)
+
 # --- extract_session_context (integration) ---
 print("\n=== extract_session_context ===")
 with tempfile.TemporaryDirectory() as d:
