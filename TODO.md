@@ -112,3 +112,21 @@ The name "context-reset" confuses Claude into thinking this is only for resettin
 - [x] T004: Update all hook module references (auto-continue.js, cwd-drift-detector.js)
 - [x] T005: Keep `context_reset.py` as backward-compat alias (re-exports all names from new_session.py)
 - [x] T006: Update README.md, CLAUDE.md, and project rules with new naming
+
+## Session Chain Recording (008)
+
+Record old→new session transitions so chat-export can stitch context-reset jumps.
+Branch: `001-T001-add-chain-recording` (already created).
+
+- [x] T001: Modify `verify_claude_working()` to return new JSONL path instead of True/False (PR #20)
+- [x] T002: Add `record_session_chain(project_dir, old_jsonl, new_jsonl)` function (PR #20)
+- [x] T003: Call chain recording in `main()` after successful verify (PR #20)
+- [x] T004: Add tests for record_session_chain (12 new tests, 82 total passing) (PR #20)
+
+## Filter Boilerplate (009)
+
+- [x] T001: Filter hook/system boilerplate from SESSION_STATE.md transcript (PR #21)
+
+## Pretrust Full Format (010)
+
+- [x] T001: Write all 10 native fields in ensure_workspace_trusted (PR #22)
