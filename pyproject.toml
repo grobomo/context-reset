@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "claude-context-reset"
+version = "1.0.0"
+description = "Launch new Claude Code sessions with automatic state handoff"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.8"
+
+[project.scripts]
+new-session = "new_session:main"
+context-reset = "new_session:main"
+
+[tool.setuptools]
+py-modules = ["new_session", "context_reset", "task_claims"]

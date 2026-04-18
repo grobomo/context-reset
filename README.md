@@ -2,6 +2,34 @@
 
 Launch a new Claude Code session in any project. When a session's context window fills up, this script seamlessly transfers work to a fresh Claude instance in a new terminal tab — no human intervention needed. Also supports switching to a different project entirely.
 
+## Quick start
+
+```bash
+# 1. Install (Python 3.8+, no other dependencies)
+pip install git+https://github.com/grobomo/context-reset
+
+# 2. Add a stop hook to ~/.claude/settings.json
+```
+
+Add this to your Claude Code settings (`~/.claude/settings.json`):
+
+```json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "type": "command",
+        "command": "new-session --project-dir $CLAUDE_PROJECT_DIR"
+      }
+    ]
+  }
+}
+```
+
+That's it. Claude will automatically reset to a fresh session when context gets heavy, carrying over TODO.md and a readable summary of the conversation.
+
+If you already have stop hooks, just add the entry to your existing `Stop` array.
+
 ## How it works
 
 1. Reads the last 500 JSONL lines from the transcript (efficient reverse-read, no full file load)
@@ -59,16 +87,27 @@ Each new tab gets:
 
 ## Integration with Claude Code hooks
 
-Add to a [stop hook](https://docs.anthropic.com/en/docs/claude-code/hooks) module to let Claude trigger resets autonomously when context gets heavy:
+Add to a [stop hook](https://docs.anthropic.com/en/docs/claude-code/hooks) in `~/.claude/settings.json` to let Claude trigger resets autonomously when context gets heavy:
+
+```json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "type": "command",
+        "command": "new-session --project-dir $CLAUDE_PROJECT_DIR"
+      }
+    ]
+  }
+}
+```
+
+The script reads `$CLAUDE_PROJECT_DIR` by default, so from a hook you can simply use `new-session`.
+
+If you prefer to run from source instead of pip install:
 
 ```
-python C:/path/to/context-reset/new_session.py --project-dir $CLAUDE_PROJECT_DIR
-```
-
-The script reads `$CLAUDE_PROJECT_DIR` by default, so from a hook you can simply:
-
-```
-python C:/path/to/context-reset/new_session.py
+python /path/to/context-reset/new_session.py --project-dir $CLAUDE_PROJECT_DIR
 ```
 
 ## Session continuity
