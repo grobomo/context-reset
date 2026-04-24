@@ -143,6 +143,18 @@ Branch: `001-T001-add-chain-recording` (already created).
 - [x] T002: configure_hook.py — BOM-free JSON writes, works in constrained language mode (PR #25)
 - [x] T003: Idempotent — second run skips already-installed components and existing hooks
 
+## Simplify openclaw-checkin.py (014)
+
+Reduce friction for Claude Code to report status to OpenClaw.
+
+- [x] T001: Make --fire-and-forget the default, add --wait flag to opt out
+- [x] T002: Auto-detect project from CLAUDE_PROJECT_DIR env var (no --project needed)
+- [x] T003: Add positional arg interface: `openclaw-checkin done "brief summary"` as shorthand
+- [x] T004: Auto-detect task ID from TODO.md "in-progress" items if --task not given
+- [x] T005: Update stop-message.txt with simplified syntax
+- [x] T006: Test all changes (all CLI + unit tests pass, 96 existing tests pass)
+- [x] T007: Copy updated files to ~/.claude/scripts/ and ~/.claude/hooks/run-modules/Stop/
+
 ## Split Reset vs New Session (011)
 
 Two scripts, two behaviors, no ambiguity:
