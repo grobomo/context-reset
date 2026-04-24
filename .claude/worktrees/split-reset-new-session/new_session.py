@@ -1095,62 +1095,15 @@ def record_session_chain(project_dir, old_jsonl, new_jsonl):
 # ============ Main ============
 
 def main():
-    parser = argparse.ArgumentParser(description="Launch a new Claude Code session")
+    parser = argparse.ArgumentParser(description="Open a new Claude Code session (never closes calling tab)")
     parser.add_argument("--project-dir", default=os.environ.get("CLAUDE_PROJECT_DIR", os.getcwd()),
                         help="Current project dir (for state saving)")
     parser.add_argument("--target-project", default=None,
-                        help="Switch to a different project dir for the new session (cross-project reset)")
+                        help="Launch in a different project dir (cross-project session)")
     parser.add_argument("--prompt", default=None)
-    parser.add_argument("--no-close", action="store_true", help="Don't close old tab")
-    parser.add_argument("--preserve", action="store_true",
-                        help="One-shot: keep old tab open this time only (also triggered by ~/.claude/.preserve-tab file)")
-    parser.add_argument("--close-tab", action="store_true",
-                        help="Auto-close terminal tab (Windows: sets WT closeOnExit=always temporarily)")
     parser.add_argument("--timeout", type=int, default=45, help="Phase 2 verification timeout in seconds")
     parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--stop", action="store_true",
-                        help="Kill current tab without launching a new one (self-close)")
     args = parser.parse_args()
-
-    # Exclusive OS-level file lock: prevents concurrent resets on the same project.
-    # Uses msvcrt.locking (Windows) / fcntl.flock (Unix) for atomic, crash-safe locking.
-    # If process crashes, OS auto-releases the lock — no stale-lock problem.
-    project_key = os.path.abspath(os.path.expanduser(args.project_dir)).replace(os.sep, "-").replace(":", "").strip("-")
-    lock_dir = os.path.join(os.path.expanduser("~"), ".claude", "context-reset")
-    os.makedirs(lock_dir, exist_ok=True)
-    lock_file = os.path.join(lock_dir, f".lock-{project_key}")
-    _lock_fh = None  # Keep file handle open for duration (OS lock requires it)
-    try:
-        _lock_fh = open(lock_file, "w")
-        if IS_WIN:
-            import msvcrt
-            msvcrt.locking(_lock_fh.fileno(), msvcrt.LK_NBLCK, 1)
-        else:
-            import fcntl
-            fcntl.flock(_lock_fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        _lock_fh.write(f"{os.getpid()}\n{time.time()}\n")
-        _lock_fh.flush()
-    except (IOError, OSError):
-        # Lock held by another process — another reset is in progress
-        log("SKIPPED: another context reset is already running (OS lock held)")
-        if _lock_fh:
-            _lock_fh.close()
-        return
-    except Exception as e:
-        log(f"WARNING: lock acquisition failed ({e}), proceeding anyway")
-        if _lock_fh:
-            _lock_fh.close()
-        _lock_fh = None
-
-    # One-shot preserve: check for flag file
-    preserve_flag = os.path.join(os.path.expanduser("~"), ".claude", ".preserve-tab")
-    if os.path.exists(preserve_flag):
-        args.preserve = True
-        try:
-            os.remove(preserve_flag)
-            log("One-shot preserve: found .preserve-tab flag file, will keep old tab")
-        except Exception:
-            pass
 
     cleanup_old_logs()
 
@@ -1162,57 +1115,25 @@ def main():
         fallback = os.path.join(home, basename) if basename else home
         log(f"WARNING: project_dir '{project_dir}' looks like Git install dir, using '{fallback}'")
         project_dir = fallback
-    # Cross-project reset: save state in current project, launch in target
+    # Cross-project: save state in current project, launch in target
     launch_dir = project_dir
     if args.target_project:
         launch_dir = os.path.abspath(os.path.expanduser(args.target_project))
         if not os.path.isdir(launch_dir):
             log(f"ERROR: target project dir does not exist: {launch_dir}")
             return
-        log(f"Cross-project reset: saving state in {project_dir}, launching in {launch_dir}")
+        log(f"Cross-project session: saving state in {project_dir}, launching in {launch_dir}")
 
     launch_name = os.path.basename(launch_dir)
 
-    def _remove_lock():
-        nonlocal _lock_fh
-        try:
-            if _lock_fh:
-                _lock_fh.close()  # Closing file handle releases OS lock
-                _lock_fh = None
-            if os.path.exists(lock_file):
-                os.remove(lock_file)
-        except Exception:
-            pass
-
-    if args.stop:
-        log(f"=== Stop mode: closing current tab for {launch_name} ===")
-        # Save session state before dying
-        context = extract_session_context(project_dir)
-        if context:
-            state_path = os.path.join(project_dir, "SESSION_STATE.md")
-            with open(state_path, "w", encoding="utf-8") as f:
-                f.write(f"# Session State (auto-generated by context-reset)\n\n")
-                f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-                f.write(f"## Last Session Conversation\n\n{context}\n")
-            log(f"Saved session state to {state_path}")
-        shell_pid = find_shell_pid()
-        if shell_pid:
-            log(f"Killing current tab (shell PID {shell_pid})")
-            kill_old_tab(shell_pid, close_tab=args.close_tab)
-        else:
-            log("WARNING: could not find shell PID to kill")
-        _remove_lock()
-        return
-
     # Build launch command (needed for dry-run and normal mode)
     prompt = args.prompt or build_prompt(launch_dir)
-    log(f"=== Context reset started for {launch_name} ===")
+    log(f"=== New session started for {launch_name} ===")
     log(f"Project dir (state): {project_dir}")
     if launch_dir != project_dir:
         log(f"Target dir (launch): {launch_dir}")
     log(f"Platform: {sys.platform}")
     log(f"Prompt: {prompt[:80]}...")
-    log(f"Close old tab: {not args.no_close}")
 
     tab_title = launch_name
     tab_color = get_tab_color(launch_dir)
@@ -1221,10 +1142,7 @@ def main():
 
     if args.dry_run:
         log(f"DRY RUN - command: {cmd}")
-        shell_pid = find_shell_pid()
-        log(f"DRY RUN - shell PID to kill: {shell_pid}")
         log("=== Dry run complete ===")
-        _remove_lock()
         return
 
     # Pre-trust the workspace so the interactive session skips the
@@ -1240,22 +1158,6 @@ def main():
     _restore_foreground_window(saved_hwnd)
     log(f"New tab opened in {launch_name}")
 
-    if args.no_close or args.preserve:
-        mode = "preserve (one-shot)" if args.preserve else "no-close"
-        log(f"--{mode} mode, keeping old tab open")
-        # Signal the stop hook to let this tab idle instead of blocking with
-        # "DO NOT STOP / keep working". One-shot flag, consumed on first read.
-        idle_flag = os.path.join(os.path.expanduser("~"), ".claude", ".preserved-tab-idle")
-        try:
-            with open(idle_flag, "w") as f:
-                f.write(f"Preserved at {datetime.now().isoformat()} for review\n")
-            log("Set .preserved-tab-idle flag (stop hook will allow idle)")
-        except Exception:
-            pass
-        log(f"=== Context reset complete ({mode}) ===")
-        _remove_lock()
-        return
-
     # Phase 1b: Wait for new process
     log("Phase 1b: waiting for new Claude process (up to 15s)...")
     process_detected = False
@@ -1268,9 +1170,8 @@ def main():
             break
 
     if not process_detected:
-        log("WARNING: new Claude not detected after 15s, keeping old tab open")
-        log("=== Context reset FAILED (no new process) ===")
-        _remove_lock()
+        log("WARNING: new Claude not detected after 15s")
+        log("=== New session launch UNCERTAIN (no new process detected) ===")
         return
 
     # Capture old session JSONL before verify (for chain recording)
@@ -1282,18 +1183,12 @@ def main():
         log("New Claude confirmed working")
         # Record the session chain for chat-export stitching
         record_session_chain(launch_dir, old_jsonl, new_jsonl)
-        shell_pid = find_shell_pid()
-        if shell_pid:
-            log(f"Closing old tab (shell PID {shell_pid})")
-            kill_old_tab(shell_pid, close_tab=args.close_tab)
-        else:
-            log("WARNING: could not find shell PID, keeping old tab open")
-            log("=== Context reset PARTIAL (new tab working, old tab kept) ===")
     else:
-        log(f"WARNING: no transcript activity after {args.timeout}s, keeping old tab open")
-        log("=== Context reset FAILED (no activity detected) ===")
+        log(f"WARNING: no transcript activity after {args.timeout}s")
+        log("=== New session launch UNCERTAIN (no activity detected) ===")
+        return
 
-    _remove_lock()
+    log("=== New session complete (calling tab preserved) ===")
 
 
 if __name__ == "__main__":

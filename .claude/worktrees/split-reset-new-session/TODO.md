@@ -130,27 +130,3 @@ Branch: `001-T001-add-chain-recording` (already created).
 ## Pretrust Full Format (010)
 
 - [x] T001: Write all 10 native fields in ensure_workspace_trusted (PR #22)
-
-## Pip Packaging for Team Distribution (012)
-
-- [x] T001: Create pyproject.toml with CLI entry points (`new-session`, `context-reset`) (PR #24)
-- [x] T002: Add Quick Start section to README (pip install + stop hook JSON snippet) (PR #24)
-- [x] T003: Fresh venv install from GitHub URL verified
-
-## Bootstrap Script for Team Onboarding (013)
-
-- [x] T001: PowerShell bootstrap.ps1 — checks prereqs, installs Claude Code + context-reset, configures stop hook (PR #25)
-- [x] T002: configure_hook.py — BOM-free JSON writes, works in constrained language mode (PR #25)
-- [x] T003: Idempotent — second run skips already-installed components and existing hooks
-
-## Split Reset vs New Session (011)
-
-Two scripts, two behaviors, no ambiguity:
-- `context_reset.py` — same-project reset. ALWAYS closes calling tab.
-- `new_session.py` — cross-project session. NEVER closes calling tab.
-
-- [ ] T001: context_reset.py — remove preserve-tab flag file check, always set close_old_tab=True
-- [ ] T002: new_session.py — always set close_old_tab=False, ignore preserve-tab flag
-- [ ] T003: Remove backward-compat alias (context_reset.py should NOT call new_session.py anymore)
-- [ ] T004: Update tests for new behaviors
-- [ ] T005: Update CLAUDE.md and README with the two-script model

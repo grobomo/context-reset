@@ -110,50 +110,6 @@ If you prefer to run from source instead of pip install:
 python /path/to/context-reset/new_session.py --project-dir $CLAUDE_PROJECT_DIR
 ```
 
-### The full auto-continue loop
-
-The real power is combining `new_session.py` with hook-runner's `auto-continue.js` stop module. The flow:
-
-1. Claude Code finishes a task (or tries to stop)
-2. **auto-continue.js** fires as a stop hook → returns `{decision: "block"}` with the text from `stop-message.txt`
-3. `stop-message.txt` tells Claude: "DO NOT STOP. Check TODO.md, do the next task."
-4. Claude keeps working through TODO.md tasks in a loop
-5. When context gets long, Claude saves state to TODO.md and runs `context_reset.py` itself
-6. A fresh session picks up where it left off via SESSION_STATE.md + TODO.md
-
-This creates a fully autonomous coding agent that works through a task list without human intervention.
-
-### OpenClaw checkin (cross-agent status reporting)
-
-The stop-message also instructs Claude Code to call `openclaw-checkin.py` between tasks:
-
-```bash
-python3 ~/.claude/scripts/openclaw-checkin.py \
-  --status done --task TXXX --detail "brief summary" \
-  --project PROJECT_NAME --fire-and-forget
-```
-
-This sends a status update to OpenClaw's chat API so a manager agent (e.g. Coconut) can track progress across multiple Claude Code sessions. Statuses: `done`, `blocked`, `progress`, `tests`, `error`.
-
-`--fire-and-forget` makes it non-blocking (5s timeout) — Claude doesn't wait for a response.
-
-### Calling from external systems (OpenClaw, scripts, cron)
-
-When launching Claude Code from outside a terminal (e.g. from an AI agent, cron job, or automation script):
-
-```bash
-python3 new_session.py \
-  --project-dir /path/to/project \
-  --prompt "Your task description here" \
-  --no-close
-```
-
-**Important:**
-- **No permission flags needed.** Don't add `--dangerously-skip-permissions`, `--permission-mode`, or `--print`. The script launches plain `claude` and the workspace is pre-trusted automatically via `~/.claude.json`.
-- **`--print` mode breaks the loop.** It runs one-shot and exits, bypassing the stop-hook/auto-continue system. Claude can't loop through TODO.md tasks.
-- Use `--no-close` when the caller doesn't have a tab to close (headless, agent-spawned, etc.).
-- The launched Claude session is fully autonomous — auto-continue handles task looping, context-reset handles fresh starts.
-
 ## Session continuity
 
 Context resets use two layers to preserve continuity:

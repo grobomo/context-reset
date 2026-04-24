@@ -22,24 +22,6 @@ python C:/Users/joelg/Documents/ProjectsCL1/context-reset/new_session.py --proje
 
 The prompt tells the new session to read SESSION_STATE.md (transcript context) and TODO.md.
 
-### The auto-continue loop
-
-The system creates a fully autonomous coding agent:
-1. `auto-continue.js` (stop hook) blocks Claude from stopping → feeds `stop-message.txt`
-2. `stop-message.txt` says: check TODO.md, do next task, test it, then optimize
-3. Between tasks, Claude calls `openclaw-checkin.py` to report status to OpenClaw
-4. When context fills up, Claude runs `context_reset.py` which kills this tab and opens a fresh one
-5. Fresh session reads SESSION_STATE.md + TODO.md, continues where it left off
-
-### Calling from external systems
-
-When launching from OpenClaw or any external automation:
-```bash
-python3 new_session.py --project-dir /path/to/project --prompt "task" --no-close
-```
-
-**Do NOT add permission flags** (`--dangerously-skip-permissions`, `--permission-mode`, `--print`). The script handles workspace trust automatically. `--print` mode breaks the auto-continue loop.
-
 ## Key Design Decisions
 
 - **Two-phase verification**: Process count alone is unreliable (multiple Claude instances). Transcript file activity confirms the new session is actually working.
