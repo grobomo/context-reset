@@ -166,3 +166,22 @@ Two scripts, two behaviors, no ambiguity:
 - [ ] T003: Remove backward-compat alias (context_reset.py should NOT call new_session.py anymore)
 - [ ] T004: Update tests for new behaviors
 - [ ] T005: Update CLAUDE.md and README with the two-script model
+
+## Cross-Platform Support (016)
+
+Full Mac, WSL, and Linux support for the entire Claude Code management system — not just new_session.py (which already has basic cross-platform), but openclaw-checkin.py, stop-message.txt paths, and the overall workflow.
+
+Goal: share this system with others who aren't on Windows Terminal.
+
+- [ ] T001: Audit all scripts for Windows-only assumptions (wt, powershell, C:\ paths, taskkill)
+- [ ] T002: openclaw-checkin.py — make paths portable (no hardcoded C:\Users\joelg paths)
+- [ ] T003: stop-message.txt — use env vars / relative paths instead of absolute Windows paths
+- [ ] T004: WSL support — detect WSL and route through wt.exe (WSL can call Windows executables)
+- [ ] T005: Mac support — Terminal.app / iTerm2 tab management (osascript exists but untested end-to-end)
+- [ ] T006: Linux support — gnome-terminal / tmux / screen session management
+- [ ] T007: Auto-detect platform and select correct launch method without user config
+- [ ] T008: Test end-to-end on Mac (need a Mac tester or CI)
+- [ ] T009: Test end-to-end on native Linux (gnome-terminal)
+- [ ] T010: Test end-to-end on WSL2 (route through Windows Terminal)
+- [ ] T011: Update README with cross-platform install + usage docs
+- [ ] T012: Package for pip install with platform-appropriate defaults
