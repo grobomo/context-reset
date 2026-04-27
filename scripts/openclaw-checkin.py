@@ -292,6 +292,9 @@ def main():
                         help="Request timeout in seconds (default 120, only with --wait)")
     parser.add_argument("--check-connectivity", action="store_true",
                         help="Test OpenClaw connectivity and exit")
+    # Accepted but ignored — kept for backwards compatibility with openclaw-checkin.js
+    parser.add_argument("--fire-and-forget", action="store_true",
+                        help=argparse.SUPPRESS)
     args = parser.parse_args()
 
     if args.check_connectivity:
