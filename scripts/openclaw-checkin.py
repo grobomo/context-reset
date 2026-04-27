@@ -38,7 +38,56 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 COMMS_LOG = Path.home() / ".openclaw" / "comms" / "claude-code.jsonl"
+TRACKER_PATH = Path("/home/ubu/.openclaw/workspace/scripts/claude-tabs/tracker.json")
 VALID_STATUSES = ("done", "blocked", "progress", "tests", "error")
+
+
+def _update_tracker(status: str, detail: str, project: str):
+    """Update tracker.json with checkin info. Never raises — silent on any error."""
+    try:
+        now = datetime.now(timezone.utc).isoformat()
+        project_name = os.path.basename(project.rstrip("/")) if project else ""
+        if not project_name:
+            return
+
+        # Read current tracker state
+        try:
+            with open(TRACKER_PATH) as f:
+                tracker = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return  # Can't find tracker; bail silently
+
+        tabs = tracker.get("tabs", [])
+        matched = False
+        for tab in tabs:
+            if tab.get("project_name") == project_name and tab.get("status") not in ("completed", "archived"):
+                tab["last_checkin"] = now
+                if "checkins" not in tab or not isinstance(tab["checkins"], list):
+                    tab["checkins"] = []
+                tab["checkins"].append({
+                    "timestamp": now,
+                    "status": status,
+                    "detail": detail or "",
+                    "task": tab.get("task_id") or tab.get("task", ""),
+                })
+                if status == "done":
+                    tab["status"] = "completed"
+                    tab["completed_at"] = now
+                    tab["summary"] = detail or ""
+                matched = True
+                break  # Update first matching active tab only
+
+        if not matched:
+            return  # No active tab for this project; nothing to update
+
+        # Atomic write: write to .tmp then rename
+        tmp_path = TRACKER_PATH.with_suffix(".json.tmp")
+        with open(tmp_path, "w") as f:
+            json.dump(tracker, f, indent=2)
+        tmp_path.rename(TRACKER_PATH)
+
+    except Exception:
+        pass  # Never break the checkin flow
 
 
 def _log_comms(entry: dict):
@@ -280,6 +329,11 @@ def main():
         message = args.message
     else:
         message = format_status(status, task, detail, args.project)
+
+    # Update tracker.json before sending to OpenClaw (tracker write is always fast/local)
+    project = args.project or os.environ.get("CLAUDE_PROJECT_DIR", "")
+    if status:  # only update tracker for structured status messages
+        _update_tracker(status, detail or "", project)
 
     fire_and_forget = not args.wait
     reply = send_to_openclaw(message, timeout=args.timeout,
