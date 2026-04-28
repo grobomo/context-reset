@@ -184,4 +184,4 @@ Goal: share this system with others who aren't on Windows Terminal.
 - [ ] T009: Test end-to-end on native Linux (gnome-terminal)
 - [x] T010: WSL2 dry-run verified — detection, wt.exe cmd, claude.exe fallback, shell PID found via relay process
 - [x] T011: README updated — WSL2 row in platform table, WSL details section, requirements, test count
-- [ ] T012: Package for pip install with platform-appropriate defaults
+- [x] T012: pip install verified — pyproject.toml already platform-agnostic, no changes needed
