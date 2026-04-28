@@ -512,6 +512,61 @@ if orig_env is not None:
 else:
     os.environ.pop('WSL_DISTRO_NAME', None)
 
+# --- build_launch_cmd (macOS) ---
+print("\n=== build_launch_cmd (macOS) ===")
+orig_is_wsl = context_reset.IS_WSL
+orig_is_win = context_reset.IS_WIN
+orig_is_mac = context_reset.IS_MAC
+context_reset.IS_WSL = False
+context_reset.IS_WIN = False
+context_reset.IS_MAC = True
+with tempfile.TemporaryDirectory() as d:
+    cmd = context_reset.build_launch_cmd(d, "test prompt", "my title", "#2D5F2D")
+    test("Mac: contains osascript", "osascript" in cmd)
+    test("Mac: contains Terminal", "Terminal" in cmd)
+    test("Mac: contains project dir", d.replace("\\", "/") in cmd or d in cmd)
+    test("Mac: contains claude", "claude" in cmd)
+    test("Mac: contains prompt", "test prompt" in cmd)
+    # Test single-quote escaping
+    cmd2 = context_reset.build_launch_cmd(d, "it's a test", "title", "#000000")
+    test("Mac: escapes single quotes", "it'\\''s" in cmd2)
+context_reset.IS_WSL = orig_is_wsl
+context_reset.IS_WIN = orig_is_win
+context_reset.IS_MAC = orig_is_mac
+
+# --- build_launch_cmd (Linux with gnome-terminal) ---
+print("\n=== build_launch_cmd (Linux) ===")
+orig_is_wsl = context_reset.IS_WSL
+orig_is_win = context_reset.IS_WIN
+orig_is_mac = context_reset.IS_MAC
+context_reset.IS_WSL = False
+context_reset.IS_WIN = False
+context_reset.IS_MAC = False
+# Mock _has_command to simulate gnome-terminal available
+orig_has_cmd = context_reset._has_command
+context_reset._has_command = lambda name: name == 'gnome-terminal'
+with tempfile.TemporaryDirectory() as d:
+    cmd = context_reset.build_launch_cmd(d, "test prompt", "my title", "#2D5F2D")
+    test("Linux: contains gnome-terminal", "gnome-terminal" in cmd)
+    test("Linux: contains --tab", "--tab" in cmd)
+    test("Linux: contains title", "my title" in cmd)
+    test("Linux: contains claude", "claude" in cmd)
+    test("Linux: contains prompt", "test prompt" in cmd)
+    # Test single-quote escaping
+    cmd2 = context_reset.build_launch_cmd(d, "it's a test", "title", "#000000")
+    test("Linux: escapes single quotes", "it'\\''s" in cmd2)
+# Fallback: no gnome-terminal
+context_reset._has_command = lambda name: False
+with tempfile.TemporaryDirectory() as d:
+    cmd = context_reset.build_launch_cmd(d, "test prompt", "my title", "#2D5F2D")
+    test("Linux fallback: uses bash -c", "bash -c" in cmd)
+    test("Linux fallback: runs in background (&)", cmd.endswith("&"))
+    test("Linux fallback: contains claude", "claude" in cmd)
+context_reset._has_command = orig_has_cmd
+context_reset.IS_WSL = orig_is_wsl
+context_reset.IS_WIN = orig_is_win
+context_reset.IS_MAC = orig_is_mac
+
 # --- Summary ---
 print(f"\n{'='*40}")
 print(f"Results: {PASS} passed, {FAIL} failed")
