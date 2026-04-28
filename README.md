@@ -46,9 +46,14 @@ If any step fails, the old tab is preserved. Nothing is lost.
 | Platform | Terminal | Tab launch | Tab color | Tab title | Kill method |
 |----------|----------|-----------|-----------|-----------|-------------|
 | Windows | Windows Terminal | `wt new-tab` | Yes | Yes | `taskkill /F /T` (detached) |
+| WSL2 | Windows Terminal | `wt.exe new-tab` via interop | Yes | Yes | `SIGTERM` to process group |
 | macOS | Terminal.app | `osascript` | No | No | `SIGTERM` to process group |
 | Linux | gnome-terminal | `gnome-terminal --tab` | No | Yes | `SIGTERM` to process group |
 | Linux (fallback) | any | background process | No | No | `SIGTERM` to process group |
+
+### WSL2 details
+
+WSL2 is auto-detected via `/proc/version`. The script calls `wt.exe` through Windows interop to open a new Windows Terminal tab running the same WSL distro. Claude is launched as `claude` (if installed natively in WSL via npm) or `claude.exe` (Windows Claude via interop). Process management uses native Linux tools (`ps`, `kill`). WSL-specific process names (`relay`, `sessionleader`) are recognized in the process tree.
 
 ## Usage
 
@@ -179,8 +184,9 @@ Use `--close-tab` to auto-close: temporarily sets `closeOnExit=always`, kills th
 ## Requirements
 
 - Python 3.8+
-- Claude Code CLI (`claude`) in PATH
+- Claude Code CLI (`claude`) in PATH (or `claude.exe` via Windows interop in WSL)
 - **Windows**: Windows Terminal (ships with Windows 11, available for Windows 10)
+- **WSL2**: Windows Terminal + `wt.exe` available via interop (automatic if WT is installed)
 - **macOS**: Terminal.app (default) or iTerm2
 - **Linux**: gnome-terminal recommended; falls back to background process
 
@@ -196,7 +202,7 @@ python scripts/test.py
 new_session.py            # Main script — session launcher and state handoff
 context_reset.py          # Backward-compat alias (imports new_session.py)
 task_claims.py            # Multi-tab task negotiation with OS-level file locks
-scripts/test.py           # Tests for new_session (62 tests)
+scripts/test.py           # Tests for new_session (110 tests)
 scripts/test_task_claims.py  # Tests for task_claims (35 tests)
 ~/.claude/context-reset/  # Runtime data (logs, color map)
 SESSION_STATE.md          # Auto-generated in target project (gitignored)

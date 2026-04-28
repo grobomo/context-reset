@@ -183,5 +183,5 @@ Goal: share this system with others who aren't on Windows Terminal.
 - [ ] T008: Test end-to-end on Mac (need a Mac tester or CI)
 - [ ] T009: Test end-to-end on native Linux (gnome-terminal)
 - [x] T010: WSL2 dry-run verified — detection, wt.exe cmd, claude.exe fallback, shell PID found via relay process
-- [ ] T011: Update README with cross-platform install + usage docs
+- [x] T011: README updated — WSL2 row in platform table, WSL details section, requirements, test count
 - [ ] T012: Package for pip install with platform-appropriate defaults
