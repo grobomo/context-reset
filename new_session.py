@@ -590,8 +590,9 @@ def count_claude_processes():
             return -1
     else:
         try:
+            # Match both 'claude' (native) and 'claude.exe' (Windows interop in WSL)
             out = subprocess.check_output(
-                ['pgrep', '-c', '-x', 'claude'],
+                ['pgrep', '-c', 'claude'],
                 encoding='utf-8', timeout=5,
                 stderr=subprocess.DEVNULL
             )
@@ -820,6 +821,8 @@ def _find_shell_pid_unix():
         'gnome-terminal-', 'gnome-terminal', 'konsole', 'xfce4-terminal',
         'terminal', 'iterm2', 'alacritty', 'kitty', 'wezterm', 'tmux',
         'screen', 'login', 'sshd', 'init', 'launchd', 'systemd',
+        # WSL-specific: relay proxies the terminal, sessionleader wraps shells
+        'relay', 'sessionleader', 'init-systemd',
     )
 
     pid = os.getpid()
@@ -850,9 +853,10 @@ def _find_shell_pid_unix():
         return None
 
     # Safety: verify this shell doesn't own multiple Claude processes
+    # Match both 'claude' (native) and 'claude.exe' (Windows interop in WSL)
     claude_children = sum(
         1 for (ppid, name) in _process_table.values()
-        if ppid == tab_shell and name == 'claude'
+        if ppid == tab_shell and 'claude' in name
     )
     if claude_children > 1:
         log(f"SAFETY: shell PID {tab_shell} owns {claude_children} Claude processes - NOT killing")
@@ -866,6 +870,16 @@ def _find_shell_pid_unix():
 def _get_wsl_distro():
     """Return the current WSL distribution name."""
     return os.environ.get('WSL_DISTRO_NAME', 'Ubuntu')
+
+
+def _get_wsl_claude_cmd():
+    """Return the claude command name available in WSL.
+
+    Prefers native 'claude' (npm install) over 'claude.exe' (Windows interop).
+    """
+    if _has_command('claude'):
+        return 'claude'
+    return 'claude.exe'
 
 
 def build_launch_cmd(project_dir, prompt, tab_title, tab_color):
@@ -886,11 +900,12 @@ def build_launch_cmd(project_dir, prompt, tab_title, tab_color):
         # The new tab runs WSL with the same distro, cd's, and launches claude
         escaped = prompt.replace("'", "'\\''")
         distro = _get_wsl_distro()
+        claude_cmd = _get_wsl_claude_cmd()
         return (
             f'wt.exe new-tab --title "{safe_title}" '
             f'--tabColor "{tab_color}" '
             f"wsl.exe -d {distro} -- bash -lc "
-            f"'cd \"{project_dir}\" && claude '\"'\"'{escaped}'\"'\"''"
+            f"'cd \"{project_dir}\" && {claude_cmd} '\"'\"'{escaped}'\"'\"''"
         )
     elif IS_MAC:
         escaped = prompt.replace("'", "'\\''")
