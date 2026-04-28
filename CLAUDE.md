@@ -54,6 +54,6 @@ python3 new_session.py --project-dir /path/to/project --prompt "task" --no-close
 ## Testing
 
 ```bash
-python scripts/test.py    # 110 tests
+python scripts/test.py    # 125 tests
 python new_session.py --project-dir . --dry-run   # verify command without executing
 ```
