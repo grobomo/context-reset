@@ -38,7 +38,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 COMMS_LOG = Path.home() / ".openclaw" / "comms" / "claude-code.jsonl"
-TRACKER_PATH = Path("/home/ubu/.openclaw/workspace/scripts/claude-tabs/tracker.json")
+TRACKER_PATH = Path(os.environ.get(
+    "OPENCLAW_TRACKER_PATH",
+    str(Path.home() / ".openclaw" / "workspace" / "scripts" / "claude-tabs" / "tracker.json")
+))
 VALID_STATUSES = ("done", "blocked", "progress", "tests", "error")
 
 

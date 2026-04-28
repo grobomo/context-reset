@@ -456,6 +456,62 @@ with tempfile.TemporaryDirectory() as d:
 
     context_reset.get_project_logs_dir = orig_fn
 
+# --- WSL detection ---
+print("\n=== WSL detection ===")
+# IS_WSL is set at import time from /proc/version. We can't change /proc/version
+# in tests, but we can verify the detection logic and the downstream effects.
+test("IS_WSL is a boolean", isinstance(context_reset.IS_WSL, bool))
+# On Windows (where tests run), IS_WSL should be False
+if context_reset.IS_WIN:
+    test("IS_WSL is False on Windows", context_reset.IS_WSL is False)
+
+# --- _get_wsl_distro ---
+print("\n=== _get_wsl_distro ===")
+# Default when no env var
+orig_env = os.environ.pop('WSL_DISTRO_NAME', None)
+test("default distro is Ubuntu", context_reset._get_wsl_distro() == "Ubuntu")
+os.environ['WSL_DISTRO_NAME'] = 'Debian'
+test("reads WSL_DISTRO_NAME env var", context_reset._get_wsl_distro() == "Debian")
+if orig_env is not None:
+    os.environ['WSL_DISTRO_NAME'] = orig_env
+else:
+    os.environ.pop('WSL_DISTRO_NAME', None)
+
+# --- build_launch_cmd WSL branch ---
+print("\n=== build_launch_cmd (WSL) ===")
+# Temporarily pretend we're on WSL to test the WSL branch
+orig_is_wsl = context_reset.IS_WSL
+orig_is_win = context_reset.IS_WIN
+orig_is_mac = context_reset.IS_MAC
+context_reset.IS_WSL = True
+context_reset.IS_WIN = False
+context_reset.IS_MAC = False
+os.environ['WSL_DISTRO_NAME'] = 'Ubuntu'
+with tempfile.TemporaryDirectory() as d:
+    cmd = context_reset.build_launch_cmd(d, "test prompt", "my title", "#2D5F2D")
+    test("WSL: contains wt.exe", "wt.exe" in cmd)
+    test("WSL: contains wsl.exe -d", "wsl.exe -d" in cmd)
+    test("WSL: contains distro name", "Ubuntu" in cmd)
+    test("WSL: contains tab title", "my title" in cmd)
+    test("WSL: contains tab color", "#2D5F2D" in cmd)
+    test("WSL: contains claude command", "claude" in cmd)
+    test("WSL: contains prompt", "test prompt" in cmd)
+    test("WSL: uses bash -lc (login shell)", "bash -lc" in cmd)
+    # Test single-quote escaping
+    cmd2 = context_reset.build_launch_cmd(d, "it's a test", "title", "#000000")
+    test("WSL: escapes single quotes", "it'\\''s" in cmd2)
+    # Test title sanitization
+    cmd3 = context_reset.build_launch_cmd(d, "p", 'title "with" quotes', "#000000")
+    test("WSL: strips quotes from title", '"with"' not in cmd3 and "title with quotes" in cmd3)
+# Restore original platform flags
+context_reset.IS_WSL = orig_is_wsl
+context_reset.IS_WIN = orig_is_win
+context_reset.IS_MAC = orig_is_mac
+if orig_env is not None:
+    os.environ['WSL_DISTRO_NAME'] = orig_env
+else:
+    os.environ.pop('WSL_DISTRO_NAME', None)
+
 # --- Summary ---
 print(f"\n{'='*40}")
 print(f"Results: {PASS} passed, {FAIL} failed")

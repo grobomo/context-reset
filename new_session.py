@@ -12,8 +12,8 @@ Usage:
     python new_session.py --project-dir /current/project --target-project /other/project
     python new_session.py --project-dir /path/to/project  # new session, same project
 
-Supported platforms: Windows (Windows Terminal), macOS (Terminal.app/iTerm2),
-Linux (gnome-terminal, or plain background process).
+Supported platforms: Windows (Windows Terminal), WSL2 (via wt.exe interop),
+macOS (Terminal.app/iTerm2), Linux (gnome-terminal, or plain background process).
 
 Audit log: ~/.claude/context-reset/YYYY-MM-DD.log (rotated daily)
 """
@@ -34,6 +34,13 @@ from datetime import datetime
 
 IS_WIN = sys.platform == "win32"
 IS_MAC = sys.platform == "darwin"
+IS_WSL = False
+if not IS_WIN and not IS_MAC:
+    try:
+        with open('/proc/version') as f:
+            IS_WSL = 'microsoft' in f.read().lower()
+    except (FileNotFoundError, PermissionError):
+        pass
 
 
 # ============ Logging ============
@@ -513,6 +520,27 @@ def _si():
 
 def get_wt_settings_path():
     """Return the path to Windows Terminal's settings.json."""
+    if IS_WSL:
+        # In WSL, find WT settings via the Windows filesystem mount
+        try:
+            # Use cmd.exe to get the Windows LOCALAPPDATA path, then convert
+            out = subprocess.check_output(
+                ['cmd.exe', '/C', 'echo', '%LOCALAPPDATA%'],
+                encoding='utf-8', timeout=5, stderr=subprocess.DEVNULL
+            ).strip()
+            # Convert Windows path to WSL path: C:\Users\... -> /mnt/c/Users/...
+            win_path = out.replace('\\', '/')
+            if len(win_path) >= 2 and win_path[1] == ':':
+                wsl_path = f"/mnt/{win_path[0].lower()}{win_path[2:]}"
+            else:
+                wsl_path = win_path
+            return os.path.join(
+                wsl_path, "Packages",
+                "Microsoft.WindowsTerminal_8wekyb3d8bbwe",
+                "LocalState", "settings.json"
+            )
+        except Exception:
+            pass
     return os.path.join(
         os.environ.get("LOCALAPPDATA", ""),
         "Packages", "Microsoft.WindowsTerminal_8wekyb3d8bbwe",
@@ -835,18 +863,34 @@ def _find_shell_pid_unix():
 
 # ============ Platform: Tab Launch ============
 
+def _get_wsl_distro():
+    """Return the current WSL distribution name."""
+    return os.environ.get('WSL_DISTRO_NAME', 'Ubuntu')
+
+
 def build_launch_cmd(project_dir, prompt, tab_title, tab_color):
     """Build the command to open a new terminal tab with claude."""
+    # Sanitize tab title (could contain quotes from TODO.md)
+    safe_title = tab_title.replace('"', '').replace("'", "")
     if IS_WIN:
         # PowerShell single-quote escaping: double the single quotes
         ps_escaped = prompt.replace("'", "''")
-        # Also sanitize tab title (could contain quotes from TODO.md)
-        safe_title = tab_title.replace('"', '').replace("'", "")
         return (
             f'wt new-tab --title "{safe_title}" '
             f'--tabColor "{tab_color}" '
             f'--startingDirectory "{project_dir}" '
             f"powershell -NoExit -Command \"claude '{ps_escaped}'\""
+        )
+    elif IS_WSL:
+        # WSL can call wt.exe via Windows interop to open a new WT tab
+        # The new tab runs WSL with the same distro, cd's, and launches claude
+        escaped = prompt.replace("'", "'\\''")
+        distro = _get_wsl_distro()
+        return (
+            f'wt.exe new-tab --title "{safe_title}" '
+            f'--tabColor "{tab_color}" '
+            f"wsl.exe -d {distro} -- bash -lc "
+            f"'cd \"{project_dir}\" && claude '\"'\"'{escaped}'\"'\"''"
         )
     elif IS_MAC:
         escaped = prompt.replace("'", "'\\''")
@@ -1210,7 +1254,8 @@ def main():
     log(f"Project dir (state): {project_dir}")
     if launch_dir != project_dir:
         log(f"Target dir (launch): {launch_dir}")
-    log(f"Platform: {sys.platform}")
+    platform_label = "WSL" if IS_WSL else sys.platform
+    log(f"Platform: {platform_label}")
     log(f"Prompt: {prompt[:80]}...")
     log(f"Close old tab: {not args.no_close}")
 
