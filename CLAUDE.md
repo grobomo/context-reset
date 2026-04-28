@@ -11,7 +11,8 @@ Main file: `new_session.py`. No dependencies beyond Python stdlib.
 - **Phase 1**: Launch new terminal tab with `claude '<prompt>'`
 - **Phase 1b**: Wait for new Claude process (process count check, 15s timeout)
 - **Phase 2**: Verify new session is active (transcript file growth, configurable timeout)
-- **Kill**: Close old tab's shell process tree (detached subprocess on Windows, SIGTERM on Unix)
+- **Kill**: Close old tab's shell process tree (detached subprocess on Windows, SIGTERM on Unix/WSL)
+- **WSL detection**: Auto-detects WSL2 via `/proc/version`, launches tabs via `wt.exe` interop, uses `claude.exe` if native `claude` isn't installed. Recognizes WSL process names (`relay`, `sessionleader`) in the process tree.
 
 ## Integration
 
@@ -53,6 +54,6 @@ python3 new_session.py --project-dir /path/to/project --prompt "task" --no-close
 ## Testing
 
 ```bash
-python scripts/test.py    # 70 tests
+python scripts/test.py    # 125 tests
 python new_session.py --project-dir . --dry-run   # verify command without executing
 ```

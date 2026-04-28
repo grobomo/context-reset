@@ -7,14 +7,15 @@ DO NOT STOP. DO NOT SUMMARIZE. DO NOT LIST OPTIONS. Follow this order:
 5) Zoom out: why does this project exist, how does it integrate, what real-world value comes next? How can we share it with the team — publish, document, demo, package? Write new tasks to TODO.md then EXECUTE. No breaks. No asking. Plan then do.
 
 OPENCLAW CHECKIN: Before resuming the next task, report your status to OpenClaw. Fire-and-forget is the default. Project and task ID are auto-detected from CLAUDE_PROJECT_DIR and TODO.md.
-  wsl -e bash -c 'python3 /mnt/c/Users/joelg/.claude/scripts/openclaw-checkin.py done "brief summary of what happened"'
+  python3 "$OPENCLAW_CHECKIN_PY" done "brief summary of what happened"
+  (OPENCLAW_CHECKIN_PY defaults to ~/.claude/scripts/openclaw-checkin.py)
   Statuses: done | blocked | progress | tests | error
   Override auto-detection: --task T035 --project myproject
   Wait for reply: --wait (default is fire-and-forget, 5s timeout, silent fail if OpenClaw is down)
 
 If context is getting long, save state to $CLAUDE_PROJECT_DIR/TODO.md (always the launch directory, not cwd), then run context-reset (ALWAYS closes this tab):
-  python "$CONTEXT_RESET_PY" --project-dir $CLAUDE_PROJECT_DIR
-  (CONTEXT_RESET_PY defaults to ~/Documents/ProjectsCL1/_grobomo/context-reset/context_reset.py)
+  python3 "$CONTEXT_RESET_PY" --project-dir $CLAUDE_PROJECT_DIR
+  (CONTEXT_RESET_PY defaults to ~/.claude/scripts/context_reset.py)
 
 CROSS-PROJECT WORK: If you created TODOs in another project's TODO.md, open a new session there (this tab keeps running):
-  python "$NEW_SESSION_PY" --project-dir <OTHER_PROJECT_DIR>
+  python3 "$NEW_SESSION_PY" --project-dir <OTHER_PROJECT_DIR>

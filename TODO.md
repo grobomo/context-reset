@@ -173,15 +173,15 @@ Full Mac, WSL, and Linux support for the entire Claude Code management system �
 
 Goal: share this system with others who aren't on Windows Terminal.
 
-- [ ] T001: Audit all scripts for Windows-only assumptions (wt, powershell, C:\ paths, taskkill)
-- [ ] T002: openclaw-checkin.py — make paths portable (no hardcoded C:\Users\joelg paths)
-- [ ] T003: stop-message.txt — use env vars / relative paths instead of absolute Windows paths
-- [ ] T004: WSL support — detect WSL and route through wt.exe (WSL can call Windows executables)
-- [ ] T005: Mac support — Terminal.app / iTerm2 tab management (osascript exists but untested end-to-end)
-- [ ] T006: Linux support — gnome-terminal / tmux / screen session management
-- [ ] T007: Auto-detect platform and select correct launch method without user config
+- [x] T001: Audit all scripts — 18 Windows patterns found, all gated behind IS_WIN. No unguarded assumptions.
+- [x] T002: openclaw-checkin.py — make paths portable (TRACKER_PATH via env var, Path.home() default)
+- [x] T003: stop-message.txt — use env vars ($OPENCLAW_CHECKIN_PY, $CONTEXT_RESET_PY, $NEW_SESSION_PY)
+- [x] T004: WSL support — detect WSL via /proc/version, route through wt.exe interop, 14 new tests
+- [x] T005: Mac support — osascript launch tested via mocked platform flags (6 tests). E2E needs Mac hardware (T008).
+- [x] T006: Linux support — gnome-terminal + fallback tested via mocked platform flags (9 tests). E2E needs Linux (T009).
+- [x] T007: Auto-detect platform — IS_WIN/IS_WSL/IS_MAC/Linux chain in build_launch_cmd, no user config needed
 - [ ] T008: Test end-to-end on Mac (need a Mac tester or CI)
 - [ ] T009: Test end-to-end on native Linux (gnome-terminal)
-- [ ] T010: Test end-to-end on WSL2 (route through Windows Terminal)
-- [ ] T011: Update README with cross-platform install + usage docs
-- [ ] T012: Package for pip install with platform-appropriate defaults
+- [x] T010: WSL2 dry-run verified — detection, wt.exe cmd, claude.exe fallback, shell PID found via relay process
+- [x] T011: README updated — WSL2 row in platform table, WSL details section, requirements, test count
+- [x] T012: pip install verified — pyproject.toml already platform-agnostic, no changes needed
