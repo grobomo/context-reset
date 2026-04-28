@@ -174,9 +174,9 @@ Full Mac, WSL, and Linux support for the entire Claude Code management system �
 Goal: share this system with others who aren't on Windows Terminal.
 
 - [ ] T001: Audit all scripts for Windows-only assumptions (wt, powershell, C:\ paths, taskkill)
-- [ ] T002: openclaw-checkin.py — make paths portable (no hardcoded C:\Users\joelg paths)
-- [ ] T003: stop-message.txt — use env vars / relative paths instead of absolute Windows paths
-- [ ] T004: WSL support — detect WSL and route through wt.exe (WSL can call Windows executables)
+- [x] T002: openclaw-checkin.py — make paths portable (TRACKER_PATH via env var, Path.home() default)
+- [x] T003: stop-message.txt — use env vars ($OPENCLAW_CHECKIN_PY, $CONTEXT_RESET_PY, $NEW_SESSION_PY)
+- [x] T004: WSL support — detect WSL via /proc/version, route through wt.exe interop, 14 new tests
 - [ ] T005: Mac support — Terminal.app / iTerm2 tab management (osascript exists but untested end-to-end)
 - [ ] T006: Linux support — gnome-terminal / tmux / screen session management
 - [ ] T007: Auto-detect platform and select correct launch method without user config
