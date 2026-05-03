@@ -190,3 +190,6 @@ Goal: share this system with others who aren't on Windows Terminal.
 
 - [x] T001: Fix phantom tab — use list-based Popen (shell=False) on Windows to avoid cmd.exe quote mangling that spawns extra tabs (PR #31)
 - [x] T002: Fix focus steal — increase initial delay from 0.3s to 0.8s so check runs AFTER WT's async focus steal (~0.5s), add stability confirmation (PR #31)
+- [x] T003: Pull PR #31 into main working tree — fixes were merged to GitHub but never deployed locally (all 3 bugs were running old code)
+- [ ] T004: Remove CREATE_NO_WINDOW from wt.exe Popen — wt is a GUI app, this flag may break COM IPC causing phantom WT window
+- [ ] T005: Add tab-level focus restore — send Ctrl+Shift+Tab after new tab opens (hwnd approach only works cross-app, not cross-tab within WT)
