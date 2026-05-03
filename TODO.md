@@ -191,6 +191,28 @@ Goal: share this system with others who aren't on Windows Terminal.
 - [x] T001: Fix phantom tab — use list-based Popen (shell=False) on Windows to avoid cmd.exe quote mangling that spawns extra tabs (PR #31)
 - [x] T002: Fix focus steal — increase initial delay from 0.3s to 0.8s so check runs AFTER WT's async focus steal (~0.5s), add stability confirmation (PR #31)
 - [x] T003: Pull PR #31 into main working tree — fixes were merged to GitHub but never deployed locally (all 3 bugs were running old code)
-- [ ] T004: Remove CREATE_NO_WINDOW from wt.exe Popen — wt is a GUI app, this flag may break COM IPC causing phantom WT window
+- [x] T004: Remove CREATE_NO_WINDOW from wt.exe Popen (PR #32)
 - [x] T005: WT subcommand chaining (new-tab ; focus-tab --previous) for no focus steal (PR #32)
-- [ ] T006: Fix worktree over-resolution — subdirectories inside worktrees (e.g. labs/dd-lab) must not resolve to parent project
+- [x] T006: Fix worktree over-resolution — subdirectories inside worktrees (7661a66)
+
+## Dir Exists + Phantom Tab v2 (019)
+
+- [x] T001: Add os.path.isdir() check before launch (PR #33)
+- [x] T002: Remove WT subcommand chaining (`;` in Popen args) — caused phantom tabs (PR #34)
+
+## Fix close-tab killing wrong session (021)
+
+- [x] T001: `wt close-tab` closes ACTIVE tab, not the dead one — reverted to closeOnExit=always (PR #37)
+
+## Merge scripts (022)
+
+- [x] T001: context_reset.py reduced to 10-line wrapper, delegates to new_session.py --close-old-tab (PR #38)
+
+## Remove stale focus-tab code (023)
+
+- [x] T001: Remove `; focus-tab --previous` from build_launch_cmd and undefined `_refocus_previous_tab()` (PR #39)
+
+## Session 2026-05-03 handoff
+
+PRs merged: #37 (closeOnExit fix), #38 (merge scripts), #39 (remove stale focus code).
+Cleaned up 6 stale git worktrees. Next: live test a real context reset to verify old tab closes.
