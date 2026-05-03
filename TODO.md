@@ -130,3 +130,11 @@ Branch: `001-T001-add-chain-recording` (already created).
 ## Pretrust Full Format (010)
 
 - [x] T001: Write all 10 native fields in ensure_workspace_trusted (PR #22)
+
+## Headless Launch & Focus Fix (017)
+
+Fix two UX regressions: (1) `subprocess.Popen(cmd, shell=True)` at launch creates a visible cmd.exe flash ("second tab"), (2) WT steals focus after `_restore_foreground_window` succeeds because WT tab creation is async and re-steals focus ~0.5s later.
+
+- [ ] T001: Hide cmd.exe flash — add CREATE_NO_WINDOW + startupinfo to launch Popen
+- [ ] T002: Fix focus restore — run in background thread with ALT-key trick, retry for 3s to outlast WT's async focus steal
+- [ ] T003: Add logging to detached kill subprocess — write what/when to context-reset log file
