@@ -989,11 +989,17 @@ def _kill_old_tab_windows(shell_pid, close_tab):
         f'_log = lambda m: open(_lf, "a").write("[" + datetime.datetime.now().strftime("%H:%M:%S") + "] [detached-kill] " + m + "\\n"); '
     )
     if close_tab:
-        # Kill the shell tree, then close the dead tab with WT CLI.
-        # This avoids modifying the global closeOnExit setting which
-        # would affect ALL tabs for several seconds.
+        # Set closeOnExit=always BEFORE launching the detached kill script.
+        # When taskkill kills the shell, WT sees the process exit and
+        # auto-closes that specific tab. Then the detached script restores
+        # closeOnExit=graceful after a short delay.
+        #
+        # This is safer than `wt close-tab` which closes the ACTIVE tab
+        # (not necessarily the dead one) and can kill the wrong session.
+        set_wt_close_on_exit("always")
+        wt_settings = repr(get_wt_settings_path())
         kill_script = (
-            f'import subprocess, time, os, datetime; '
+            f'import subprocess, time, json, os, datetime; '
             f'{log_snippet}'
             f'_log("Killing PID {shell_pid} (close_tab=True)"); '
             f'si = subprocess.STARTUPINFO(); '
@@ -1002,10 +1008,12 @@ def _kill_old_tab_windows(shell_pid, close_tab):
             f'rc = subprocess.call("taskkill /F /T /PID {shell_pid}", '
             f'startupinfo=si, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); '
             f'_log("taskkill exit code: " + str(rc)); '
-            f'time.sleep(0.5); '
-            f'rc2 = subprocess.call(["wt", "-w", "0", "close-tab"], '
-            f'startupinfo=si, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); '
-            f'_log("wt close-tab exit code: " + str(rc2))'
+            f'time.sleep(1.5); '
+            f'_wt = {wt_settings}; '
+            f'_s = json.load(open(_wt)); '
+            f'_s.setdefault("profiles", {{}}).setdefault("defaults", {{}})["closeOnExit"] = "graceful"; '
+            f'json.dump(_s, open(_wt, "w"), indent=4, ensure_ascii=False); '
+            f'_log("closeOnExit -> graceful")'
         )
     else:
         kill_script = (
