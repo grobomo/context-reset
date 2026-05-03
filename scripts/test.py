@@ -480,60 +480,87 @@ else:
 # --- _get_wsl_profile_id ---
 print("\n=== _get_wsl_profile_id ===")
 orig_settings_path = context_reset._get_wt_settings_path
-with tempfile.TemporaryDirectory() as d:
-    settings_path = os.path.join(d, "settings.json")
-    fake_settings = {
-        "profiles": {
-            "list": [
-                {
-                    "name": "Ubuntu",
-                    "source": "CanonicalGroupLimited.Ubuntu_old",
-                    "guid": "{old-canonical-guid}",
-                    "font": {},
-                    "hidden": False,
-                },
-                {
-                    "name": "Ubuntu",
-                    "source": "Microsoft.WSL",
-                    "guid": "{modern-msft-wsl-guid}",
-                    "font": {"size": 19},
-                    "hidden": False,
-                },
-                {
-                    "name": "Debian",
-                    "source": "Microsoft.WSL",
-                    "guid": "{debian-guid}",
-                    "font": {"size": 14},
-                    "hidden": False,
-                },
-                {
-                    "name": "Hidden",
-                    "source": "Microsoft.WSL",
-                    "guid": "{hidden-guid}",
-                    "font": {"size": 12},
-                    "hidden": True,
-                },
-            ]
+orig_wt_profile_id = os.environ.pop('WT_PROFILE_ID', None)
+try:
+    with tempfile.TemporaryDirectory() as d:
+        settings_path = os.path.join(d, "settings.json")
+        fake_settings = {
+            "profiles": {
+                "list": [
+                    {
+                        "name": "Ubuntu",
+                        "source": "CanonicalGroupLimited.Ubuntu_old",
+                        "guid": "{old-canonical-guid}",
+                        "font": {},
+                        "hidden": False,
+                    },
+                    {
+                        "name": "Ubuntu",
+                        "source": "Microsoft.WSL",
+                        "guid": "{modern-msft-wsl-guid}",
+                        "font": {"size": 19},
+                        "hidden": False,
+                    },
+                    {
+                        "name": "Debian",
+                        "source": "Microsoft.WSL",
+                        "guid": "{debian-guid}",
+                        "font": {"size": 14},
+                        "hidden": False,
+                    },
+                    {
+                        "name": "Hidden",
+                        "source": "Microsoft.WSL",
+                        "guid": "{hidden-guid}",
+                        "font": {"size": 12},
+                        "hidden": True,
+                    },
+                ]
+            }
         }
-    }
-    with open(settings_path, 'w') as f:
-        json.dump(fake_settings, f)
-    context_reset._get_wt_settings_path = lambda: settings_path
-    test("picks profile with explicit font over one without",
-         context_reset._get_wsl_profile_id("Ubuntu") == "{modern-msft-wsl-guid}")
-    test("matches case-insensitively",
-         context_reset._get_wsl_profile_id("ubuntu") == "{modern-msft-wsl-guid}")
-    test("returns guid for distro with single match",
-         context_reset._get_wsl_profile_id("Debian") == "{debian-guid}")
-    test("falls back to distro name when no match",
-         context_reset._get_wsl_profile_id("Fedora") == "Fedora")
-    test("ignores hidden profiles",
-         context_reset._get_wsl_profile_id("Hidden") == "Hidden")
-    # Settings file unreachable -> falls back to distro name
-    context_reset._get_wt_settings_path = lambda: None
-    test("falls back to distro name when settings unreachable",
-         context_reset._get_wsl_profile_id("Ubuntu") == "Ubuntu")
-context_reset._get_wt_settings_path = orig_settings_path
+        with open(settings_path, 'w') as f:
+            json.dump(fake_settings, f)
+        context_reset._get_wt_settings_path = lambda: settings_path
+        test("picks profile with explicit font over one without",
+             context_reset._get_wsl_profile_id("Ubuntu") == "{modern-msft-wsl-guid}")
+        test("matches case-insensitively",
+             context_reset._get_wsl_profile_id("ubuntu") == "{modern-msft-wsl-guid}")
+        test("returns guid for distro with single match",
+             context_reset._get_wsl_profile_id("Debian") == "{debian-guid}")
+        test("falls back to distro name when no match",
+             context_reset._get_wsl_profile_id("Fedora") == "Fedora")
+        test("ignores hidden profiles",
+             context_reset._get_wsl_profile_id("Hidden") == "Hidden")
+        # Prefix match: distro name has version suffix, profile is bare
+        test("prefix-matches Ubuntu-22.04 distro to Ubuntu profile",
+             context_reset._get_wsl_profile_id("Ubuntu-22.04") == "{modern-msft-wsl-guid}")
+        test("prefix-matches Debian-12 distro to Debian profile",
+             context_reset._get_wsl_profile_id("Debian-12") == "{debian-guid}")
+        # WT_PROFILE_ID env var takes precedence over settings scoring
+        os.environ['WT_PROFILE_ID'] = '{user-active-profile-guid}'
+        test("WT_PROFILE_ID env var wins over settings.json scoring",
+             context_reset._get_wsl_profile_id("Ubuntu") == "{user-active-profile-guid}")
+        os.environ.pop('WT_PROFILE_ID', None)
+        # Settings file unreachable -> falls back to distro name
+        context_reset._get_wt_settings_path = lambda: None
+        test("falls back to distro name when settings unreachable",
+             context_reset._get_wsl_profile_id("Ubuntu") == "Ubuntu")
+        # WT_PROFILE_ID still wins even when settings unreachable
+        os.environ['WT_PROFILE_ID'] = '{env-only-guid}'
+        test("WT_PROFILE_ID works without settings.json",
+             context_reset._get_wsl_profile_id("Ubuntu") == "{env-only-guid}")
+        os.environ.pop('WT_PROFILE_ID', None)
+finally:
+    context_reset._get_wt_settings_path = orig_settings_path
+    if orig_wt_profile_id is not None:
+        os.environ['WT_PROFILE_ID'] = orig_wt_profile_id
+
+# --- _get_wt_settings_path probes Preview package ---
+print("\n=== _get_wt_settings_path (Preview probe) ===")
+# The function probes _WT_PACKAGE_DIRS in order; verify Preview is in the list
+test("probes both stable and Preview WT packages",
+     'Microsoft.WindowsTerminal_8wekyb3d8bbwe' in context_reset._WT_PACKAGE_DIRS
+     and 'Microsoft.WindowsTerminalPreview_8wekyb3d8bbwe' in context_reset._WT_PACKAGE_DIRS)
 
 # --- _find_shell_pid_unix WSL fallback ---
 print("\n=== _find_shell_pid_unix (WSL exec'd-into-claude) ===")

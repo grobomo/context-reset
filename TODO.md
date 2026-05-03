@@ -192,12 +192,12 @@ Goal: share this system with others who aren't on Windows Terminal.
 
 After the context reset that produced this TODO, verify in the new tab:
 - [x] V001: Tab uses Ubuntu profile — FAILED first run; root cause: two profiles named "Ubuntu" exist (CanonicalGroupLimited with default font, Microsoft.WSL with the user's `font.size: 19`). `wt -p "Ubuntu"` picked the wrong one. Fixed by reading WT settings.json and passing the GUID of the best-scoring match.
-- [ ] V002: No permission prompt for `python3` on session start (requires user to add `permissions.defaultMode: "bypassPermissions"` to `/home/ubu/.claude/settings.json`)
+- [x] V002: No permission prompt for `python3` on session start — verified: settings.json uses `defaultMode: "auto"` + `skipDangerousModePermissionPrompt: true`, Bash python3 commands run without prompts
 - [x] V003: Old tab actually closed — FAILED first run; root cause: `bash -lc 'cd dir && claude'` exec'd into claude, so `_find_shell_pid_unix` couldn't find a shell in the chain (only claude → relay → sessionleader). Fixed by adding a WSL fallback that detects claude-as-tab-leader when its parent is `relay`, and the kill walks the relay→sessionleader ancestor chain.
 - [x] V004: SESSION_STATE.md was readable and useful (transcript handoff intact)
 - [x] T015: Fix `_find_shell_pid_unix` + `_kill_old_tab_unix` for WSL bash-exec'd-into-claude case (done — see V003 above)
 
 ## WSL Verification v2 (next session after fix)
 
-- [ ] V005: Font/colors match the user's preferred Ubuntu profile (not the old Canonical default)
-- [ ] V006: Old tab actually closes when reset runs from inside it (no orphan left over)
+- [x] V005: Font/colors match the user's preferred Ubuntu profile — verified: log shows `wt.exe ... -p "{6bf3184b-6f66-59e8-98b5-d58cb2e6f440}"` (Microsoft.WSL profile with `font.size: 19`), not the Canonical default
+- [x] V006: Old tab actually closes when reset runs from inside it — verified: old PIDs 21281/21282/21283 are dead, only new tab tree (22440→22441→22442 claude) survives

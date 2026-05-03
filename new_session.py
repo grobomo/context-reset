@@ -896,8 +896,18 @@ def _get_wsl_claude_cmd():
     return 'claude.exe'
 
 
+_WT_PACKAGE_DIRS = (
+    'Microsoft.WindowsTerminal_8wekyb3d8bbwe',
+    'Microsoft.WindowsTerminalPreview_8wekyb3d8bbwe',
+)
+
+
 def _get_wt_settings_path():
-    """Return path to Windows Terminal settings.json from WSL, or None."""
+    """Return path to Windows Terminal settings.json from WSL, or None.
+
+    Probes both stable and Preview package locations so users on either
+    channel are covered.
+    """
     try:
         out = subprocess.check_output(
             ['cmd.exe', '/c', 'echo %LOCALAPPDATA%'],
@@ -909,12 +919,11 @@ def _get_wt_settings_path():
             ['wslpath', out],
             stderr=subprocess.DEVNULL, timeout=5,
         ).decode('utf-8', errors='ignore').strip()
-        path = os.path.join(
-            wsl_path, 'Packages',
-            'Microsoft.WindowsTerminal_8wekyb3d8bbwe',
-            'LocalState', 'settings.json',
-        )
-        return path if os.path.exists(path) else None
+        for pkg in _WT_PACKAGE_DIRS:
+            path = os.path.join(wsl_path, 'Packages', pkg, 'LocalState', 'settings.json')
+            if os.path.exists(path):
+                return path
+        return None
     except Exception:
         return None
 
@@ -922,13 +931,22 @@ def _get_wt_settings_path():
 def _get_wsl_profile_id(distro):
     """Return the best WT profile identifier for `wt.exe -p`.
 
-    Multiple profiles can share the same name (e.g. one from
-    CanonicalGroupLimited with default font, another from Microsoft.WSL with
-    user-customized font). Picking by name alone hits the first match, which
-    is usually the wrong one. Read settings.json, score the candidates, and
-    return the GUID of the best match. Fall back to the distro name if
-    settings can't be read.
+    Resolution order, most to least authoritative:
+
+    1. ``$WT_PROFILE_ID`` — set by Windows Terminal itself in every shell it
+       launches. This is exactly the profile the user is currently running,
+       so it auto-adapts when they switch profiles or use a non-default one.
+    2. Exact name match in settings.json (case-insensitive), tie-broken by
+       a score that favors explicit font config and the modern WSL source.
+    3. Prefix/substring match — handles the common case where the distro is
+       ``Ubuntu-22.04`` but the auto-generated profile is just ``Ubuntu``.
+    4. Distro name verbatim — last-resort fallback. WT will use the default
+       profile if it doesn't recognize this name.
     """
+    env_id = os.environ.get('WT_PROFILE_ID', '').strip()
+    if env_id:
+        return env_id
+
     settings_path = _get_wt_settings_path()
     if not settings_path:
         return distro
@@ -937,16 +955,12 @@ def _get_wsl_profile_id(distro):
             settings = json.load(f)
     except Exception:
         return distro
-    matches = [
+
+    visible = [
         p for p in settings.get('profiles', {}).get('list', [])
         if not p.get('hidden', False)
-        and p.get('name', '').lower() == distro.lower()
     ]
-    if not matches:
-        return distro
 
-    # Prefer profiles with explicit font config (the user customized it),
-    # then prefer the modern Microsoft.WSL source over older WSL sources.
     def score(p):
         s = 0
         if p.get('font'):
@@ -958,8 +972,31 @@ def _get_wsl_profile_id(distro):
             s += 5
         return s
 
-    best = max(matches, key=score)
-    return best.get('guid') or distro
+    distro_lc = distro.lower()
+    exact = [p for p in visible if p.get('name', '').lower() == distro_lc]
+    if exact:
+        return max(exact, key=score).get('guid') or distro
+
+    # Prefix match: distro "Ubuntu-22.04" matches profile name "Ubuntu",
+    # and vice-versa. Only consider WSL-sourced profiles to avoid latching
+    # onto an unrelated user-named profile that happens to share a prefix.
+    def is_wsl_profile(p):
+        src = p.get('source', '')
+        return src.startswith('Microsoft.WSL') or src.startswith('Windows.Terminal.Wsl')
+
+    fuzzy = []
+    for p in visible:
+        if not is_wsl_profile(p):
+            continue
+        name_lc = p.get('name', '').lower()
+        if not name_lc:
+            continue
+        if distro_lc.startswith(name_lc) or name_lc.startswith(distro_lc):
+            fuzzy.append(p)
+    if fuzzy:
+        return max(fuzzy, key=score).get('guid') or distro
+
+    return distro
 
 
 def build_launch_cmd(project_dir, prompt, tab_title, tab_color):
