@@ -135,13 +135,11 @@ def main():
     log(f"Phase 1: launching new tab ({before} Claude processes before)")
 
     saved_hwnd = _save_foreground_window()
-    # On Windows: cmd is a list, use shell=False to avoid cmd.exe quote mangling
-    # On macOS/Linux: cmd is a string, use shell=True
+    # On Windows: cmd is a list starting with wt (GUI app). No shell, no
+    # CREATE_NO_WINDOW (console-only flag that breaks wt COM IPC, causing
+    # phantom WT windows). On macOS/Linux: string with shell=True.
     if IS_WIN:
-        popen_kwargs = {
-            "creationflags": subprocess.CREATE_NO_WINDOW,
-            "startupinfo": _si(),
-        }
+        popen_kwargs = {}
     else:
         popen_kwargs = {"shell": True}
     subprocess.Popen(cmd, **popen_kwargs)
