@@ -429,7 +429,7 @@ with tempfile.TemporaryDirectory() as d:
     )
     test("context_reset dry-run exits 0", result_cr.returncode == 0)
     test("context_reset dry-run prints command", "DRY RUN" in result_cr.stdout)
-    test("context_reset always closes", "always closes" in result_cr.stdout)
+    test("context_reset closes old tab", "Close old tab: True" in result_cr.stdout)
 
     # new_session.py dry-run
     result_ns = subprocess.run(
@@ -438,21 +438,21 @@ with tempfile.TemporaryDirectory() as d:
     )
     test("new_session dry-run exits 0", result_ns.returncode == 0)
     test("new_session dry-run prints command", "DRY RUN" in result_ns.stdout)
-    test("new_session never closes", "never closes" in result_ns.stdout)
+    test("new_session keeps old tab", "Close old tab: False" in result_ns.stdout)
 
-    # context_reset.py rejects --no-close
+    # context_reset.py rejects unknown args (--no-close not a valid flag)
     result_nc = subprocess.run(
         [sys.executable, "context_reset.py", "--project-dir", d, "--no-close", "--dry-run"],
         capture_output=True, text=True, cwd=project_root
     )
     test("context_reset rejects --no-close", result_nc.returncode != 0)
 
-    # new_session.py rejects --stop
-    result_stop = subprocess.run(
-        [sys.executable, "new_session.py", "--project-dir", d, "--stop"],
+    # new_session.py --close-old-tab behaves like context_reset
+    result_close = subprocess.run(
+        [sys.executable, "new_session.py", "--project-dir", d, "--close-old-tab", "--dry-run"],
         capture_output=True, text=True, cwd=project_root
     )
-    test("new_session rejects --stop", result_stop.returncode != 0)
+    test("--close-old-tab sets close mode", "Close old tab: True" in result_close.stdout)
 
 # --- non-existent directory check ---
 print("\n=== non-existent directory check ===")
