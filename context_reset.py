@@ -13,6 +13,7 @@ Usage:
 
 import argparse
 import os
+import subprocess
 import sys
 import time
 from datetime import datetime
@@ -172,7 +173,6 @@ def main():
     log(f"Phase 1: launching new tab ({before} Claude processes before)")
 
     saved_hwnd = _save_foreground_window()
-    import subprocess
     popen_kwargs = {"shell": True}
     if IS_WIN:
         popen_kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
