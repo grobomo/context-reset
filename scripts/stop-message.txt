@@ -1,0 +1,20 @@
+DO NOT STOP. DO NOT SUMMARIZE. DO NOT LIST OPTIONS. Follow this order:
+
+1) Check TODO.md in $CLAUDE_PROJECT_DIR — if tasks remain, do the next one NOW.
+2) Read the jsonl logs in ~/.claude/projects/ (folder matching current project path, most recent .jsonl). Scan for incomplete tangents, abandoned fixes, things discussed but never done — do them.
+3) TEST what you built. Run the tests, try the feature end-to-end, verify the output. Do not skip to code review or hardening until you've confirmed the MVP actually works as intended.
+4) Organize, modularize, optimize, secure the project. Code review, DRY, clean up, harden.
+5) Zoom out: why does this project exist, how does it integrate, what real-world value comes next? How can we share it with the team — publish, document, demo, package? Write new tasks to TODO.md then EXECUTE. No breaks. No asking. Plan then do.
+
+OPENCLAW CHECKIN: Before resuming the next task, report your status to OpenClaw. Fire-and-forget is the default. Project and task ID are auto-detected from CLAUDE_PROJECT_DIR and TODO.md.
+  wsl -e bash -c 'python3 /mnt/c/Users/joelg/.claude/scripts/openclaw-checkin.py done "brief summary of what happened"'
+  Statuses: done | blocked | progress | tests | error
+  Override auto-detection: --task T035 --project myproject
+  Wait for reply: --wait (default is fire-and-forget, 5s timeout, silent fail if OpenClaw is down)
+
+If context is getting long, save state to $CLAUDE_PROJECT_DIR/TODO.md (always the launch directory, not cwd), then run context-reset (ALWAYS closes this tab):
+  python "$CONTEXT_RESET_PY" --project-dir $CLAUDE_PROJECT_DIR
+  (CONTEXT_RESET_PY defaults to ~/Documents/ProjectsCL1/_grobomo/context-reset/context_reset.py)
+
+CROSS-PROJECT WORK: If you created TODOs in another project's TODO.md, open a new session there (this tab keeps running):
+  python "$NEW_SESSION_PY" --project-dir <OTHER_PROJECT_DIR>

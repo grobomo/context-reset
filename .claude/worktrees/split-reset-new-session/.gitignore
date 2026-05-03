@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+archive/
+SESSION_STATE.md
+.test-results/
+.workflow-state.json
+specs/
+build/
+dist/
+*.egg-info/

@@ -1,13 +1,6 @@
-# context-reset / new-session
+# context-reset (new-session)
 
-Two scripts for Claude Code session management:
-
-| Script | Purpose | Old tab |
-|--------|---------|---------|
-| `context_reset.py` | Same-project reset (context full) | **Always killed** |
-| `new_session.py` | New session (same or different project) | **Never killed** |
-
-When a session's context window fills up, `context_reset.py` seamlessly transfers work to a fresh Claude instance in a new terminal tab — no human intervention needed. `new_session.py` opens a new session while keeping the current one running.
+Launch a new Claude Code session in any project. When a session's context window fills up, this script seamlessly transfers work to a fresh Claude instance in a new terminal tab — no human intervention needed. Also supports switching to a different project entirely.
 
 ## Quick start
 
@@ -26,7 +19,7 @@ Add this to your Claude Code settings (`~/.claude/settings.json`):
     "Stop": [
       {
         "type": "command",
-        "command": "context-reset --project-dir $CLAUDE_PROJECT_DIR"
+        "command": "new-session --project-dir $CLAUDE_PROJECT_DIR"
       }
     ]
   }
@@ -44,7 +37,7 @@ If you already have stop hooks, just add the entry to your existing `Stop` array
 3. Opens a new terminal tab/window with `claude` pointed at your project
 4. Waits for the new Claude process to start (process count check)
 5. Verifies the new session is working (transcript file activity)
-6. Kills the old tab's shell process tree (`context_reset.py` only; `new_session.py` preserves it)
+6. Kills the old tab's shell process tree
 
 If any step fails, the old tab is preserved. Nothing is lost.
 
@@ -60,27 +53,29 @@ If any step fails, the old tab is preserved. Nothing is lost.
 ## Usage
 
 ```bash
-# Context reset — same project, kills old tab
-python context_reset.py --project-dir /path/to/project
-context-reset --project-dir /path/to/project  # pip CLI entry point
-
-# New session — same or different project, keeps old tab
+# Basic — new session in current project (context reset)
 python new_session.py --project-dir /path/to/project
-python new_session.py --project-dir /current --target-project /other
 
-# Kill current tab without launching a new one
-python context_reset.py --stop
+# Switch to a different project
+python new_session.py --project-dir /path/to/other/project
+
+# Auto-close the old tab (default: tab stays open for review)
+python new_session.py --close-tab
 
 # Custom prompt for the new session
 python new_session.py --prompt "Fix the failing tests"
 
 # Preview without executing
-python context_reset.py --dry-run
 python new_session.py --dry-run
 
+# Keep old tab open (new tab only)
+python new_session.py --no-close
+
 # Custom verification timeout (default: 45s)
-python context_reset.py --timeout 60
+python new_session.py --timeout 60
 ```
+
+> **Note:** `context_reset.py` still works as a backward-compatible alias.
 
 ## Tab identification
 
@@ -88,7 +83,7 @@ Each new tab gets:
 
 - **Title**: Set to the project folder name via `wt --title` on tab creation. Claude Code overwrites with its status icon during the session (this is desirable -- shows working/idle state).
 - **Color**: A persistent per-project color from a 10-color palette. All tabs for the same project share the same color. Colors are stored in `~/.claude/context-reset/color-map.json` and auto-rotate through unused slots. This is the primary project identifier.
-- **Focus**: New tabs don't steal focus — a background thread with ALT-key trick retries focus restoration for 3s to outlast WT's async focus steal (Windows).
+- **Focus**: New tabs don't steal focus -- the script saves and restores the foreground window (Windows).
 
 ## Integration with Claude Code hooks
 
@@ -100,64 +95,20 @@ Add to a [stop hook](https://docs.anthropic.com/en/docs/claude-code/hooks) in `~
     "Stop": [
       {
         "type": "command",
-        "command": "context-reset --project-dir $CLAUDE_PROJECT_DIR"
+        "command": "new-session --project-dir $CLAUDE_PROJECT_DIR"
       }
     ]
   }
 }
 ```
 
-The script reads `$CLAUDE_PROJECT_DIR` by default, so from a hook you can simply use `context-reset`.
+The script reads `$CLAUDE_PROJECT_DIR` by default, so from a hook you can simply use `new-session`.
 
 If you prefer to run from source instead of pip install:
 
 ```
-python /path/to/context-reset/context_reset.py --project-dir $CLAUDE_PROJECT_DIR
+python /path/to/context-reset/new_session.py --project-dir $CLAUDE_PROJECT_DIR
 ```
-
-### The full auto-continue loop
-
-The real power is combining `new_session.py` with hook-runner's `auto-continue.js` stop module. The flow:
-
-1. Claude Code finishes a task (or tries to stop)
-2. **auto-continue.js** fires as a stop hook → returns `{decision: "block"}` with the text from `stop-message.txt`
-3. `stop-message.txt` tells Claude: "DO NOT STOP. Check TODO.md, do the next task."
-4. Claude keeps working through TODO.md tasks in a loop
-5. When context gets long, Claude saves state to TODO.md and runs `context_reset.py` itself
-6. A fresh session picks up where it left off via SESSION_STATE.md + TODO.md
-
-This creates a fully autonomous coding agent that works through a task list without human intervention.
-
-### OpenClaw checkin (cross-agent status reporting)
-
-The stop-message also instructs Claude Code to call `openclaw-checkin.py` between tasks:
-
-```bash
-python3 ~/.claude/scripts/openclaw-checkin.py \
-  --status done --task TXXX --detail "brief summary" \
-  --project PROJECT_NAME --fire-and-forget
-```
-
-This sends a status update to OpenClaw's chat API so a manager agent (e.g. Coconut) can track progress across multiple Claude Code sessions. Statuses: `done`, `blocked`, `progress`, `tests`, `error`.
-
-`--fire-and-forget` makes it non-blocking (5s timeout) — Claude doesn't wait for a response.
-
-### Calling from external systems (OpenClaw, scripts, cron)
-
-When launching Claude Code from outside a terminal (e.g. from an AI agent, cron job, or automation script):
-
-```bash
-python3 new_session.py \
-  --project-dir /path/to/project \
-  --prompt "Your task description here" \
-  --no-close
-```
-
-**Important:**
-- **No permission flags needed.** Don't add `--dangerously-skip-permissions`, `--permission-mode`, or `--print`. The script launches plain `claude` and the workspace is pre-trusted automatically via `~/.claude.json`.
-- **`--print` mode breaks the loop.** It runs one-shot and exits, bypassing the stop-hook/auto-continue system. Claude can't loop through TODO.md tasks.
-- Use `--no-close` when the caller doesn't have a tab to close (headless, agent-spawned, etc.).
-- The launched Claude session is fully autonomous — auto-continue handles task looping, context-reset handles fresh starts.
 
 ## Session continuity
 
@@ -177,9 +128,9 @@ The new session reads `SESSION_STATE.md` first (what actually happened), then `T
 
 ## Tab close behavior
 
-`context_reset.py` always kills the old tab after the new session is verified working. On Windows Terminal, the tab stays visible after the shell is killed (`closeOnExit: "graceful"`), so you can still scroll back and review.
+By default, the old tab stays open after the shell is killed — Windows Terminal's `closeOnExit: "graceful"` setting keeps it so you can scroll back and review the conversation.
 
-`new_session.py` never kills the old tab — both sessions run side by side.
+Use `--close-tab` to auto-close: temporarily sets `closeOnExit=always`, kills the shell, then a detached process restores `closeOnExit=graceful` after 3 seconds.
 
 ## Requirements
 
@@ -198,10 +149,10 @@ python scripts/test.py
 ## Files
 
 ```
-new_session.py            # Shared functions + new-session launcher (never closes old tab)
-context_reset.py          # Same-project reset (always closes old tab)
+new_session.py            # Main script — session launcher and state handoff
+context_reset.py          # Backward-compat alias (imports new_session.py)
 task_claims.py            # Multi-tab task negotiation with OS-level file locks
-scripts/test.py           # Tests (108 tests)
+scripts/test.py           # Tests for new_session (62 tests)
 scripts/test_task_claims.py  # Tests for task_claims (35 tests)
 ~/.claude/context-reset/  # Runtime data (logs, color map)
 SESSION_STATE.md          # Auto-generated in target project (gitignored)
