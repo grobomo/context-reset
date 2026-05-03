@@ -394,15 +394,61 @@ with tempfile.TemporaryDirectory() as d:
         test("contains claude command", "claude" in cmd)
         test("contains prompt", "test prompt" in cmd)
 
-# --- dry-run ---
-print("\n=== dry-run mode ===")
+# --- _resolve_worktree_root ---
+print("\n=== _resolve_worktree_root ===")
+test("normal path unchanged",
+     context_reset._resolve_worktree_root("/projects/myapp") == "/projects/myapp")
+test("worktree path resolves to root",
+     context_reset._resolve_worktree_root("/projects/myapp/.claude/worktrees/feat-branch")
+     == "/projects/myapp")
+test("worktree trailing slash",
+     context_reset._resolve_worktree_root("/projects/myapp/.claude/worktrees/feat-branch/")
+     == "/projects/myapp")
+test("windows worktree path",
+     context_reset._resolve_worktree_root("C:\\Dev\\proj\\.claude\\worktrees\\fix-bug")
+     == "C:\\Dev\\proj")
+test(".claude without worktrees unchanged",
+     context_reset._resolve_worktree_root("/projects/myapp/.claude/settings")
+     == "/projects/myapp/.claude/settings")
+test("nested worktree subpath",
+     context_reset._resolve_worktree_root("/proj/.claude/worktrees/wt/src/main.py")
+     == "/proj")
+
+# --- dry-run: split behavior ---
+print("\n=== dry-run mode (split behavior) ===")
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 with tempfile.TemporaryDirectory() as d:
-    result = subprocess.run(
+    # context_reset.py dry-run
+    result_cr = subprocess.run(
         [sys.executable, "context_reset.py", "--project-dir", d, "--dry-run"],
-        capture_output=True, text=True, cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        capture_output=True, text=True, cwd=project_root
     )
-    test("dry-run exits 0", result.returncode == 0)
-    test("dry-run prints command", "DRY RUN" in result.stdout)
+    test("context_reset dry-run exits 0", result_cr.returncode == 0)
+    test("context_reset dry-run prints command", "DRY RUN" in result_cr.stdout)
+    test("context_reset always closes", "always closes" in result_cr.stdout)
+
+    # new_session.py dry-run
+    result_ns = subprocess.run(
+        [sys.executable, "new_session.py", "--project-dir", d, "--dry-run"],
+        capture_output=True, text=True, cwd=project_root
+    )
+    test("new_session dry-run exits 0", result_ns.returncode == 0)
+    test("new_session dry-run prints command", "DRY RUN" in result_ns.stdout)
+    test("new_session never closes", "never closes" in result_ns.stdout)
+
+    # context_reset.py rejects --no-close
+    result_nc = subprocess.run(
+        [sys.executable, "context_reset.py", "--project-dir", d, "--no-close", "--dry-run"],
+        capture_output=True, text=True, cwd=project_root
+    )
+    test("context_reset rejects --no-close", result_nc.returncode != 0)
+
+    # new_session.py rejects --stop
+    result_stop = subprocess.run(
+        [sys.executable, "new_session.py", "--project-dir", d, "--stop"],
+        capture_output=True, text=True, cwd=project_root
+    )
+    test("new_session rejects --stop", result_stop.returncode != 0)
 
 # --- record_session_chain ---
 print("\n=== record_session_chain ===")
