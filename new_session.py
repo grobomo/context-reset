@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-new-session: Open a new Claude Code session in any project.
+new-session: Open a new Claude Code session in any project. NEVER closes the calling tab.
 
 Opens a fresh Claude tab for the same or a different project. The calling tab
 is NEVER closed -- use context_reset.py for same-project resets that close the
@@ -28,6 +28,7 @@ import signal
 import subprocess
 import os
 import sys
+import threading
 import time
 from datetime import datetime
 
@@ -836,18 +837,27 @@ def _find_shell_pid_unix():
 # ============ Platform: Tab Launch ============
 
 def build_launch_cmd(project_dir, prompt, tab_title, tab_color):
-    """Build the command to open a new terminal tab with claude."""
+    """Build the command to open a new terminal tab with claude.
+
+    On Windows: returns a list (for shell=False) to avoid cmd.exe quote
+    mangling that can spawn phantom tabs.
+    On macOS/Linux: returns a string (for shell=True).
+    """
     if IS_WIN:
         # PowerShell single-quote escaping: double the single quotes
         ps_escaped = prompt.replace("'", "''")
         # Also sanitize tab title (could contain quotes from TODO.md)
         safe_title = tab_title.replace('"', '').replace("'", "")
-        return (
-            f'wt new-tab --title "{safe_title}" '
-            f'--tabColor "{tab_color}" '
-            f'--startingDirectory "{project_dir}" '
-            f"powershell -NoExit -Command \"claude '{ps_escaped}'\""
-        )
+        # Return a list — avoids shell=True and cmd.exe quote mangling
+        return [
+            'wt', 'new-tab',
+            '--title', safe_title,
+            '--tabColor', tab_color,
+            '--startingDirectory', project_dir,
+            '--',
+            'powershell', '-NoExit', '-Command',
+            f"claude '{ps_escaped}'",
+        ]
     elif IS_MAC:
         escaped = prompt.replace("'", "'\\''")
         return (
@@ -876,27 +886,47 @@ def _save_foreground_window():
         return None
 
 
-def _restore_foreground_window(hwnd, delay=0.3):
-    """Restore focus to a saved window handle after a delay (Windows only).
+def _restore_foreground_window(hwnd, initial_delay=0.8, poll_delay=0.3):
+    """Restore focus to a saved window handle in a background thread (Windows only).
 
-    Tries multiple times because Windows Terminal tab creation can steal
-    focus asynchronously after the initial Popen returns.
+    Runs in a daemon thread so it doesn't block the main flow. Waits for WT's
+    async focus steal (~0.5s after Popen) with a longer initial delay, then
+    retries for ~3s. Uses the ALT-key trick to satisfy Windows'
+    SetForegroundWindow restriction.
     """
     if not IS_WIN or not hwnd:
         return
-    user32 = ctypes.windll.user32
-    try:
-        for attempt in range(4):
-            time.sleep(delay)
-            # BringWindowToTop + SetForegroundWindow for reliability
-            user32.BringWindowToTop(hwnd)
-            user32.SetForegroundWindow(hwnd)
-            if user32.GetForegroundWindow() == hwnd:
-                log(f"Restored focus to original window (attempt {attempt + 1})")
-                return
-        log("WARNING: focus restore attempted 4 times, may not have succeeded")
-    except Exception as e:
-        log(f"WARNING: could not restore focus: {e}")
+
+    def _restore():
+        user32 = ctypes.windll.user32
+        try:
+            # Wait for WT's async focus steal to land before checking
+            time.sleep(initial_delay)
+            for attempt in range(10):
+                current = user32.GetForegroundWindow()
+                if current == hwnd:
+                    # Confirm it's stable (not just checked before WT steals)
+                    time.sleep(0.1)
+                    if user32.GetForegroundWindow() == hwnd:
+                        log(f"Focus already on target window (attempt {attempt + 1})")
+                        return
+                # Press and release ALT to satisfy SetForegroundWindow's
+                # "caller must be foreground" restriction. keybd_event with
+                # KEYEVENTF_EXTENDEDKEY (0x1) and KEYEVENTF_KEYUP (0x2).
+                user32.keybd_event(0x12, 0, 0x1, 0)  # VK_MENU down
+                user32.keybd_event(0x12, 0, 0x1 | 0x2, 0)  # VK_MENU up
+                user32.BringWindowToTop(hwnd)
+                user32.SetForegroundWindow(hwnd)
+                if user32.GetForegroundWindow() == hwnd:
+                    log(f"Restored focus to original window (attempt {attempt + 1})")
+                    return
+                time.sleep(poll_delay)
+            log("WARNING: focus restore attempted 10 times over ~4s, may not have succeeded")
+        except Exception as e:
+            log(f"WARNING: could not restore focus: {e}")
+
+    t = threading.Thread(target=_restore, daemon=True)
+    t.start()
 
 
 def _has_command(name):
@@ -931,27 +961,42 @@ def _kill_old_tab_windows(shell_pid, close_tab):
     log("=== Context reset complete ===")
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
+    log_dir = repr(LOG_DIR)
+    # Helper snippet for detached kill scripts to write to the daily audit log
+    log_snippet = (
+        f'import os, datetime; '
+        f'_ld = {log_dir}; os.makedirs(_ld, exist_ok=True); '
+        f'_lf = os.path.join(_ld, datetime.datetime.now().strftime("%Y-%m-%d") + ".log"); '
+        f'_log = lambda m: open(_lf, "a").write("[" + datetime.datetime.now().strftime("%H:%M:%S") + "] [detached-kill] " + m + "\\n"); '
+    )
     if wt_changed:
         kill_script = (
-            f'import subprocess, sys, time, os; '
+            f'import subprocess, sys, time, os, datetime; '
             f'sys.path.insert(0, {repr(script_dir)}); '
+            f'{log_snippet}'
+            f'_log("Killing PID {shell_pid} (close_tab=True, wt_changed=True)"); '
             f'si = subprocess.STARTUPINFO(); '
             f'si.dwFlags |= subprocess.STARTF_USESHOWWINDOW; '
             f'si.wShowWindow = 0; '
-            f'subprocess.call("taskkill /F /T /PID {shell_pid}", '
+            f'rc = subprocess.call("taskkill /F /T /PID {shell_pid}", '
             f'startupinfo=si, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); '
+            f'_log("taskkill exit code: " + str(rc)); '
             f'time.sleep(3); '
             f'from context_reset import set_wt_close_on_exit; '
-            f'set_wt_close_on_exit("graceful")'
+            f'set_wt_close_on_exit("graceful"); '
+            f'_log("Restored WT closeOnExit to graceful")'
         )
     else:
         kill_script = (
-            f'import subprocess; '
+            f'import subprocess, os, datetime; '
+            f'{log_snippet}'
+            f'_log("Killing PID {shell_pid} (close_tab=False)"); '
             f'si = subprocess.STARTUPINFO(); '
             f'si.dwFlags |= subprocess.STARTF_USESHOWWINDOW; '
             f'si.wShowWindow = 0; '
-            f'subprocess.call("taskkill /F /T /PID {shell_pid}", '
-            f'startupinfo=si, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)'
+            f'rc = subprocess.call("taskkill /F /T /PID {shell_pid}", '
+            f'startupinfo=si, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); '
+            f'_log("taskkill exit code: " + str(rc))'
         )
     subprocess.Popen(
         [sys.executable, '-c', kill_script],
@@ -974,6 +1019,28 @@ def _kill_old_tab_unix(shell_pid):
         except Exception:
             pass
     sys.exit(0)
+
+
+# ============ Worktree Resolution ============
+
+def _resolve_worktree_root(project_dir):
+    """If project_dir is inside .claude/worktrees/, resolve to the project root.
+
+    Claude Code worktrees live at <project>/.claude/worktrees/<name>/. When
+    CLAUDE_PROJECT_DIR points there, the new session should open in <project>/
+    so hook-runner path checks work and the session starts at the real root.
+
+    Returns the resolved path, or project_dir unchanged if not in a worktree.
+    """
+    normalized = project_dir.replace("\\", "/")
+    marker = "/.claude/worktrees/"
+    idx = normalized.find(marker)
+    if idx != -1:
+        root = project_dir[:idx]
+        worktree_name = normalized[idx + len(marker):].rstrip("/").split("/")[0]
+        log(f"Detected worktree path, resolving to project root: {root} (worktree: {worktree_name})")
+        return root
+    return project_dir
 
 
 # ============ Transcript Verification ============
@@ -1092,6 +1159,67 @@ def record_session_chain(project_dir, old_jsonl, new_jsonl):
     log(f"Recorded session chain: {record['old_session']} -> {record['new_session']}")
 
 
+# ============ Shared Helpers ============
+
+def acquire_lock(project_dir_raw):
+    """Acquire an OS-level file lock to prevent concurrent resets.
+
+    Returns (lock_fh, lock_file) on success, or (None, None) if another
+    reset is already running. Caller must call release_lock() when done.
+    """
+    project_key = (os.path.abspath(os.path.expanduser(project_dir_raw))
+                   .replace(os.sep, "-").replace(":", "").strip("-"))
+    lock_dir = os.path.join(os.path.expanduser("~"), ".claude", "context-reset")
+    os.makedirs(lock_dir, exist_ok=True)
+    lock_file = os.path.join(lock_dir, f".lock-{project_key}")
+    lock_fh = None
+    try:
+        lock_fh = open(lock_file, "w")
+        if IS_WIN:
+            import msvcrt
+            msvcrt.locking(lock_fh.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(lock_fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        lock_fh.write(f"{os.getpid()}\n{time.time()}\n")
+        lock_fh.flush()
+        return lock_fh, lock_file
+    except (IOError, OSError):
+        log("SKIPPED: another context reset is already running (OS lock held)")
+        if lock_fh:
+            lock_fh.close()
+        return None, None
+    except Exception as e:
+        log(f"WARNING: lock acquisition failed ({e}), proceeding anyway")
+        if lock_fh:
+            lock_fh.close()
+        return None, lock_file
+
+
+def release_lock(lock_fh, lock_file):
+    """Release an OS-level file lock acquired by acquire_lock()."""
+    try:
+        if lock_fh:
+            lock_fh.close()
+        if lock_file and os.path.exists(lock_file):
+            os.remove(lock_file)
+    except Exception:
+        pass
+
+
+def resolve_project_dir(raw_dir):
+    """Resolve a raw project dir: expand ~, resolve worktrees, reject Git install dirs."""
+    project_dir = os.path.abspath(os.path.expanduser(raw_dir))
+    project_dir = _resolve_worktree_root(project_dir)
+    if 'Program Files' in project_dir and 'Git' in project_dir:
+        home = os.path.expanduser('~')
+        basename = os.path.basename(project_dir)
+        fallback = os.path.join(home, basename) if basename else home
+        log(f"WARNING: project_dir '{project_dir}' looks like Git install dir, using '{fallback}'")
+        project_dir = fallback
+    return project_dir
+
+
 # ============ Main ============
 
 def main():
@@ -1101,118 +1229,37 @@ def main():
     parser.add_argument("--target-project", default=None,
                         help="Switch to a different project dir for the new session (cross-project reset)")
     parser.add_argument("--prompt", default=None)
-    parser.add_argument("--no-close", action="store_true", help="Don't close old tab")
-    parser.add_argument("--preserve", action="store_true",
-                        help="One-shot: keep old tab open this time only (also triggered by ~/.claude/.preserve-tab file)")
-    parser.add_argument("--close-tab", action="store_true",
-                        help="Auto-close terminal tab (Windows: sets WT closeOnExit=always temporarily)")
     parser.add_argument("--timeout", type=int, default=45, help="Phase 2 verification timeout in seconds")
     parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--stop", action="store_true",
-                        help="Kill current tab without launching a new one (self-close)")
     args = parser.parse_args()
 
-    # Exclusive OS-level file lock: prevents concurrent resets on the same project.
-    # Uses msvcrt.locking (Windows) / fcntl.flock (Unix) for atomic, crash-safe locking.
-    # If process crashes, OS auto-releases the lock — no stale-lock problem.
-    project_key = os.path.abspath(os.path.expanduser(args.project_dir)).replace(os.sep, "-").replace(":", "").strip("-")
-    lock_dir = os.path.join(os.path.expanduser("~"), ".claude", "context-reset")
-    os.makedirs(lock_dir, exist_ok=True)
-    lock_file = os.path.join(lock_dir, f".lock-{project_key}")
-    _lock_fh = None  # Keep file handle open for duration (OS lock requires it)
-    try:
-        _lock_fh = open(lock_file, "w")
-        if IS_WIN:
-            import msvcrt
-            msvcrt.locking(_lock_fh.fileno(), msvcrt.LK_NBLCK, 1)
-        else:
-            import fcntl
-            fcntl.flock(_lock_fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        _lock_fh.write(f"{os.getpid()}\n{time.time()}\n")
-        _lock_fh.flush()
-    except (IOError, OSError):
-        # Lock held by another process — another reset is in progress
-        log("SKIPPED: another context reset is already running (OS lock held)")
-        if _lock_fh:
-            _lock_fh.close()
-        return
-    except Exception as e:
-        log(f"WARNING: lock acquisition failed ({e}), proceeding anyway")
-        if _lock_fh:
-            _lock_fh.close()
-        _lock_fh = None
-
-    # One-shot preserve: check for flag file
-    preserve_flag = os.path.join(os.path.expanduser("~"), ".claude", ".preserve-tab")
-    if os.path.exists(preserve_flag):
-        args.preserve = True
-        try:
-            os.remove(preserve_flag)
-            log("One-shot preserve: found .preserve-tab flag file, will keep old tab")
-        except Exception:
-            pass
+    lock_fh, lock_file = acquire_lock(args.project_dir)
+    if lock_fh is None and lock_file is None:
+        return  # Another reset is running
 
     cleanup_old_logs()
 
-    project_dir = os.path.abspath(os.path.expanduser(args.project_dir))
-    # Sanity check: reject paths inside Git install dir (Git Bash CWD leak)
-    if 'Program Files' in project_dir and 'Git' in project_dir:
-        home = os.path.expanduser('~')
-        basename = os.path.basename(project_dir)
-        fallback = os.path.join(home, basename) if basename else home
-        log(f"WARNING: project_dir '{project_dir}' looks like Git install dir, using '{fallback}'")
-        project_dir = fallback
-    # Cross-project reset: save state in current project, launch in target
+    project_dir = resolve_project_dir(args.project_dir)
     launch_dir = project_dir
     if args.target_project:
-        launch_dir = os.path.abspath(os.path.expanduser(args.target_project))
+        launch_dir = resolve_project_dir(args.target_project)
         if not os.path.isdir(launch_dir):
             log(f"ERROR: target project dir does not exist: {launch_dir}")
+            release_lock(lock_fh, lock_file)
             return
         log(f"Cross-project reset: saving state in {project_dir}, launching in {launch_dir}")
 
     launch_name = os.path.basename(launch_dir)
 
-    def _remove_lock():
-        nonlocal _lock_fh
-        try:
-            if _lock_fh:
-                _lock_fh.close()  # Closing file handle releases OS lock
-                _lock_fh = None
-            if os.path.exists(lock_file):
-                os.remove(lock_file)
-        except Exception:
-            pass
-
-    if args.stop:
-        log(f"=== Stop mode: closing current tab for {launch_name} ===")
-        # Save session state before dying
-        context = extract_session_context(project_dir)
-        if context:
-            state_path = os.path.join(project_dir, "SESSION_STATE.md")
-            with open(state_path, "w", encoding="utf-8") as f:
-                f.write(f"# Session State (auto-generated by context-reset)\n\n")
-                f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-                f.write(f"## Last Session Conversation\n\n{context}\n")
-            log(f"Saved session state to {state_path}")
-        shell_pid = find_shell_pid()
-        if shell_pid:
-            log(f"Killing current tab (shell PID {shell_pid})")
-            kill_old_tab(shell_pid, close_tab=args.close_tab)
-        else:
-            log("WARNING: could not find shell PID to kill")
-        _remove_lock()
-        return
-
     # Build launch command (needed for dry-run and normal mode)
     prompt = args.prompt or build_prompt(launch_dir)
-    log(f"=== Context reset started for {launch_name} ===")
+    log(f"=== New session started for {launch_name} ===")
     log(f"Project dir (state): {project_dir}")
     if launch_dir != project_dir:
         log(f"Target dir (launch): {launch_dir}")
     log(f"Platform: {sys.platform}")
     log(f"Prompt: {prompt[:80]}...")
-    log(f"Close old tab: {not args.no_close}")
+    log(f"Close old tab: False (new_session never closes)")
 
     tab_title = launch_name
     tab_color = get_tab_color(launch_dir)
@@ -1224,7 +1271,7 @@ def main():
         shell_pid = find_shell_pid()
         log(f"DRY RUN - shell PID to kill: {shell_pid}")
         log("=== Dry run complete ===")
-        _remove_lock()
+        release_lock(lock_fh, lock_file)
         return
 
     # Pre-trust the workspace so the interactive session skips the
@@ -1236,25 +1283,26 @@ def main():
     log(f"Phase 1: launching new tab ({before} Claude processes before)")
 
     saved_hwnd = _save_foreground_window()
-    subprocess.Popen(cmd, shell=True)
+    # On Windows: cmd is a list, use shell=False to avoid cmd.exe quote mangling
+    # On macOS/Linux: cmd is a string, use shell=True
+    if IS_WIN:
+        popen_kwargs = {
+            "creationflags": subprocess.CREATE_NO_WINDOW,
+            "startupinfo": _si(),
+        }
+    else:
+        popen_kwargs = {"shell": True}
+    subprocess.Popen(cmd, **popen_kwargs)
     _restore_foreground_window(saved_hwnd)
     log(f"New tab opened in {launch_name}")
 
-    if args.no_close or args.preserve:
-        mode = "preserve (one-shot)" if args.preserve else "no-close"
-        log(f"--{mode} mode, keeping old tab open")
-        # Signal the stop hook to let this tab idle instead of blocking with
-        # "DO NOT STOP / keep working". One-shot flag, consumed on first read.
-        idle_flag = os.path.join(os.path.expanduser("~"), ".claude", ".preserved-tab-idle")
-        try:
-            with open(idle_flag, "w") as f:
-                f.write(f"Preserved at {datetime.now().isoformat()} for review\n")
-            log("Set .preserved-tab-idle flag (stop hook will allow idle)")
-        except Exception:
-            pass
-        log(f"=== Context reset complete ({mode}) ===")
-        _remove_lock()
-        return
+    # Signal the stop hook to let this tab idle (new_session never kills old tab)
+    idle_flag = os.path.join(os.path.expanduser("~"), ".claude", ".preserved-tab-idle")
+    try:
+        with open(idle_flag, "w") as f:
+            f.write(f"New session launched at {datetime.now().isoformat()}\n")
+    except Exception:
+        pass
 
     # Phase 1b: Wait for new process
     log("Phase 1b: waiting for new Claude process (up to 15s)...")
@@ -1268,9 +1316,9 @@ def main():
             break
 
     if not process_detected:
-        log("WARNING: new Claude not detected after 15s, keeping old tab open")
-        log("=== Context reset FAILED (no new process) ===")
-        _remove_lock()
+        log("WARNING: new Claude not detected after 15s")
+        log("=== New session launch FAILED (no new process) ===")
+        release_lock(lock_fh, lock_file)
         return
 
     # Capture old session JSONL before verify (for chain recording)
@@ -1280,20 +1328,13 @@ def main():
     new_jsonl = verify_claude_working(launch_dir, timeout=args.timeout)
     if new_jsonl:
         log("New Claude confirmed working")
-        # Record the session chain for chat-export stitching
         record_session_chain(launch_dir, old_jsonl, new_jsonl)
-        shell_pid = find_shell_pid()
-        if shell_pid:
-            log(f"Closing old tab (shell PID {shell_pid})")
-            kill_old_tab(shell_pid, close_tab=args.close_tab)
-        else:
-            log("WARNING: could not find shell PID, keeping old tab open")
-            log("=== Context reset PARTIAL (new tab working, old tab kept) ===")
     else:
-        log(f"WARNING: no transcript activity after {args.timeout}s, keeping old tab open")
-        log("=== Context reset FAILED (no activity detected) ===")
+        log(f"WARNING: no transcript activity after {args.timeout}s")
+        log("=== New session launch FAILED (no activity detected) ===")
 
-    _remove_lock()
+    log("=== New session complete (old tab preserved) ===")
+    release_lock(lock_fh, lock_file)
 
 
 if __name__ == "__main__":
