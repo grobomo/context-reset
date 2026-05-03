@@ -147,6 +147,7 @@ def main():
         popen_kwargs = {}
     else:
         popen_kwargs = {"shell": True}
+    log(f"Launch cmd: {cmd}")
     subprocess.Popen(cmd, **popen_kwargs)
     _restore_foreground_window(saved_hwnd)
     log(f"New tab opened in {launch_name}")
