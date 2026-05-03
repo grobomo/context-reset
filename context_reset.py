@@ -135,10 +135,15 @@ def main():
     log(f"Phase 1: launching new tab ({before} Claude processes before)")
 
     saved_hwnd = _save_foreground_window()
-    popen_kwargs = {"shell": True}
+    # On Windows: cmd is a list, use shell=False to avoid cmd.exe quote mangling
+    # On macOS/Linux: cmd is a string, use shell=True
     if IS_WIN:
-        popen_kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
-        popen_kwargs["startupinfo"] = _si()
+        popen_kwargs = {
+            "creationflags": subprocess.CREATE_NO_WINDOW,
+            "startupinfo": _si(),
+        }
+    else:
+        popen_kwargs = {"shell": True}
     subprocess.Popen(cmd, **popen_kwargs)
     _restore_foreground_window(saved_hwnd)
     log(f"New tab opened in {launch_name}")

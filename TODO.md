@@ -130,3 +130,8 @@ Branch: `001-T001-add-chain-recording` (already created).
 ## Pretrust Full Format (010)
 
 - [x] T001: Write all 10 native fields in ensure_workspace_trusted (PR #22)
+
+## Launch UX Fixes (012)
+
+- [ ] T001: Fix phantom tab — use list-based Popen (shell=False) on Windows to avoid cmd.exe quote mangling that spawns extra tabs
+- [ ] T002: Fix focus steal — increase initial delay from 0.3s to 0.8s so check runs AFTER WT's async focus steal (~0.5s), add stability confirmation

@@ -842,18 +842,27 @@ def _find_shell_pid_unix():
 # ============ Platform: Tab Launch ============
 
 def build_launch_cmd(project_dir, prompt, tab_title, tab_color):
-    """Build the command to open a new terminal tab with claude."""
+    """Build the command to open a new terminal tab with claude.
+
+    On Windows: returns a list (for shell=False) to avoid cmd.exe quote
+    mangling that can spawn phantom tabs.
+    On macOS/Linux: returns a string (for shell=True).
+    """
     if IS_WIN:
         # PowerShell single-quote escaping: double the single quotes
         ps_escaped = prompt.replace("'", "''")
         # Also sanitize tab title (could contain quotes from TODO.md)
         safe_title = tab_title.replace('"', '').replace("'", "")
-        return (
-            f'wt new-tab --title "{safe_title}" '
-            f'--tabColor "{tab_color}" '
-            f'--startingDirectory "{project_dir}" '
-            f"powershell -NoExit -Command \"claude '{ps_escaped}'\""
-        )
+        # Return a list — avoids shell=True and cmd.exe quote mangling
+        return [
+            'wt', 'new-tab',
+            '--title', safe_title,
+            '--tabColor', tab_color,
+            '--startingDirectory', project_dir,
+            '--',
+            'powershell', '-NoExit', '-Command',
+            f"claude '{ps_escaped}'",
+        ]
     elif IS_MAC:
         escaped = prompt.replace("'", "'\\''")
         return (
@@ -882,13 +891,13 @@ def _save_foreground_window():
         return None
 
 
-def _restore_foreground_window(hwnd, delay=0.3):
+def _restore_foreground_window(hwnd, initial_delay=0.8, poll_delay=0.3):
     """Restore focus to a saved window handle in a background thread (Windows only).
 
-    Runs in a daemon thread so it doesn't block the main flow. Retries for ~3s
-    to outlast Windows Terminal's async focus steal (~0.5s after Popen returns).
-    Uses the ALT-key trick to satisfy Windows' SetForegroundWindow restriction
-    (only the foreground process can call it, but sending ALT releases that lock).
+    Runs in a daemon thread so it doesn't block the main flow. Waits for WT's
+    async focus steal (~0.5s after Popen) with a longer initial delay, then
+    retries for ~3s. Uses the ALT-key trick to satisfy Windows'
+    SetForegroundWindow restriction.
     """
     if not IS_WIN or not hwnd:
         return
@@ -896,11 +905,16 @@ def _restore_foreground_window(hwnd, delay=0.3):
     def _restore():
         user32 = ctypes.windll.user32
         try:
+            # Wait for WT's async focus steal to land before checking
+            time.sleep(initial_delay)
             for attempt in range(10):
-                time.sleep(delay)
-                if user32.GetForegroundWindow() == hwnd:
-                    log(f"Focus already on target window (attempt {attempt + 1})")
-                    return
+                current = user32.GetForegroundWindow()
+                if current == hwnd:
+                    # Confirm it's stable (not just checked before WT steals)
+                    time.sleep(0.1)
+                    if user32.GetForegroundWindow() == hwnd:
+                        log(f"Focus already on target window (attempt {attempt + 1})")
+                        return
                 # Press and release ALT to satisfy SetForegroundWindow's
                 # "caller must be foreground" restriction. keybd_event with
                 # KEYEVENTF_EXTENDEDKEY (0x1) and KEYEVENTF_KEYUP (0x2).
@@ -911,7 +925,8 @@ def _restore_foreground_window(hwnd, delay=0.3):
                 if user32.GetForegroundWindow() == hwnd:
                     log(f"Restored focus to original window (attempt {attempt + 1})")
                     return
-            log("WARNING: focus restore attempted 10 times over 3s, may not have succeeded")
+                time.sleep(poll_delay)
+            log("WARNING: focus restore attempted 10 times over ~4s, may not have succeeded")
         except Exception as e:
             log(f"WARNING: could not restore focus: {e}")
 
@@ -1273,11 +1288,15 @@ def main():
     log(f"Phase 1: launching new tab ({before} Claude processes before)")
 
     saved_hwnd = _save_foreground_window()
-    # CREATE_NO_WINDOW + startupinfo prevents a visible cmd.exe flash
-    popen_kwargs = {"shell": True}
+    # On Windows: cmd is a list, use shell=False to avoid cmd.exe quote mangling
+    # On macOS/Linux: cmd is a string, use shell=True
     if IS_WIN:
-        popen_kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
-        popen_kwargs["startupinfo"] = _si()
+        popen_kwargs = {
+            "creationflags": subprocess.CREATE_NO_WINDOW,
+            "startupinfo": _si(),
+        }
+    else:
+        popen_kwargs = {"shell": True}
     subprocess.Popen(cmd, **popen_kwargs)
     _restore_foreground_window(saved_hwnd)
     log(f"New tab opened in {launch_name}")

@@ -375,18 +375,21 @@ print("\n=== build_launch_cmd ===")
 with tempfile.TemporaryDirectory() as d:
     cmd = context_reset.build_launch_cmd(d, "test prompt", "my title", "#2D5F2D")
     if context_reset.IS_WIN:
-        test("contains wt new-tab", "wt new-tab" in cmd)
+        # On Windows, cmd is a list (shell=False to avoid phantom tabs)
+        cmd_str = ' '.join(cmd) if isinstance(cmd, list) else cmd
+        test("returns list on Windows", isinstance(cmd, list))
+        test("contains wt new-tab", "wt" in cmd and "new-tab" in cmd)
         test("contains tab title", "my title" in cmd)
         test("contains tab color", "#2D5F2D" in cmd)
         test("contains project dir", d in cmd)
-        test("contains prompt", "test prompt" in cmd)
+        test("contains prompt", any("test prompt" in c for c in cmd))
         # Test single-quote escaping in prompt
         cmd2 = context_reset.build_launch_cmd(d, "it's a test", "title", "#000000")
-        test("escapes single quotes for PowerShell", "it''s a test" in cmd2)
+        test("escapes single quotes for PowerShell", any("it''s a test" in c for c in cmd2))
         # Test title sanitization (quotes stripped)
         cmd3 = context_reset.build_launch_cmd(d, "p", 'title "with" quotes', "#000000")
-        test("strips quotes from title", '"with"' not in cmd3 and "title with quotes" in cmd3)
-        test("allows Claude status icon (no suppressApplicationTitle)", "--suppressApplicationTitle" not in cmd)
+        test("strips quotes from title", 'title with quotes' in cmd3 and not any('"with"' in c for c in cmd3))
+        test("allows Claude status icon (no suppressApplicationTitle)", "--suppressApplicationTitle" not in cmd_str)
     elif context_reset.IS_MAC:
         test("contains osascript", "osascript" in cmd)
         test("contains prompt", "test prompt" in cmd)
