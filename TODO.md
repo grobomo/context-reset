@@ -161,11 +161,11 @@ Two scripts, two behaviors, no ambiguity:
 - `context_reset.py` — same-project reset. ALWAYS closes calling tab.
 - `new_session.py` — cross-project session. NEVER closes calling tab.
 
-- [ ] T001: context_reset.py — remove preserve-tab flag file check, always set close_old_tab=True
-- [ ] T002: new_session.py — always set close_old_tab=False, ignore preserve-tab flag
-- [ ] T003: Remove backward-compat alias (context_reset.py should NOT call new_session.py anymore)
-- [ ] T004: Update tests for new behaviors
-- [ ] T005: Update CLAUDE.md and README with the two-script model
+- [x] T001: context_reset.py — remove preserve-tab flag file check, always set close_old_tab=True (PR #31)
+- [x] T002: new_session.py — always set close_old_tab=False, ignore preserve-tab flag (PR #31)
+- [x] T003: Remove backward-compat alias (context_reset.py should NOT call new_session.py anymore) (PR #31)
+- [x] T004: Update tests for new behaviors (PR #31)
+- [x] T005: Update CLAUDE.md and README with the two-script model (PR #31)
 
 ## Cross-Platform Support (016)
 
@@ -185,3 +185,8 @@ Goal: share this system with others who aren't on Windows Terminal.
 - [ ] T010: Test end-to-end on WSL2 (route through Windows Terminal)
 - [ ] T011: Update README with cross-platform install + usage docs
 - [ ] T012: Package for pip install with platform-appropriate defaults
+
+## Launch UX Fixes (017)
+
+- [x] T001: Fix phantom tab — use list-based Popen (shell=False) on Windows to avoid cmd.exe quote mangling that spawns extra tabs (PR #31)
+- [x] T002: Fix focus steal — increase initial delay from 0.3s to 0.8s so check runs AFTER WT's async focus steal (~0.5s), add stability confirmation (PR #31)
