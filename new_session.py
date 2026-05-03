@@ -33,6 +33,7 @@ import signal
 import subprocess
 import os
 import sys
+import threading
 import time
 from datetime import datetime
 
@@ -882,26 +883,40 @@ def _save_foreground_window():
 
 
 def _restore_foreground_window(hwnd, delay=0.3):
-    """Restore focus to a saved window handle after a delay (Windows only).
+    """Restore focus to a saved window handle in a background thread (Windows only).
 
-    Tries multiple times because Windows Terminal tab creation can steal
-    focus asynchronously after the initial Popen returns.
+    Runs in a daemon thread so it doesn't block the main flow. Retries for ~3s
+    to outlast Windows Terminal's async focus steal (~0.5s after Popen returns).
+    Uses the ALT-key trick to satisfy Windows' SetForegroundWindow restriction
+    (only the foreground process can call it, but sending ALT releases that lock).
     """
     if not IS_WIN or not hwnd:
         return
-    user32 = ctypes.windll.user32
-    try:
-        for attempt in range(4):
-            time.sleep(delay)
-            # BringWindowToTop + SetForegroundWindow for reliability
-            user32.BringWindowToTop(hwnd)
-            user32.SetForegroundWindow(hwnd)
-            if user32.GetForegroundWindow() == hwnd:
-                log(f"Restored focus to original window (attempt {attempt + 1})")
-                return
-        log("WARNING: focus restore attempted 4 times, may not have succeeded")
-    except Exception as e:
-        log(f"WARNING: could not restore focus: {e}")
+
+    def _restore():
+        user32 = ctypes.windll.user32
+        try:
+            for attempt in range(10):
+                time.sleep(delay)
+                if user32.GetForegroundWindow() == hwnd:
+                    log(f"Focus already on target window (attempt {attempt + 1})")
+                    return
+                # Press and release ALT to satisfy SetForegroundWindow's
+                # "caller must be foreground" restriction. keybd_event with
+                # KEYEVENTF_EXTENDEDKEY (0x1) and KEYEVENTF_KEYUP (0x2).
+                user32.keybd_event(0x12, 0, 0x1, 0)  # VK_MENU down
+                user32.keybd_event(0x12, 0, 0x1 | 0x2, 0)  # VK_MENU up
+                user32.BringWindowToTop(hwnd)
+                user32.SetForegroundWindow(hwnd)
+                if user32.GetForegroundWindow() == hwnd:
+                    log(f"Restored focus to original window (attempt {attempt + 1})")
+                    return
+            log("WARNING: focus restore attempted 10 times over 3s, may not have succeeded")
+        except Exception as e:
+            log(f"WARNING: could not restore focus: {e}")
+
+    t = threading.Thread(target=_restore, daemon=True)
+    t.start()
 
 
 def _has_command(name):
@@ -936,27 +951,42 @@ def _kill_old_tab_windows(shell_pid, close_tab):
     log("=== Context reset complete ===")
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
+    log_dir = repr(LOG_DIR)
+    # Helper snippet for detached kill scripts to write to the daily audit log
+    log_snippet = (
+        f'import os, datetime; '
+        f'_ld = {log_dir}; os.makedirs(_ld, exist_ok=True); '
+        f'_lf = os.path.join(_ld, datetime.datetime.now().strftime("%Y-%m-%d") + ".log"); '
+        f'_log = lambda m: open(_lf, "a").write("[" + datetime.datetime.now().strftime("%H:%M:%S") + "] [detached-kill] " + m + "\\n"); '
+    )
     if wt_changed:
         kill_script = (
-            f'import subprocess, sys, time, os; '
+            f'import subprocess, sys, time, os, datetime; '
             f'sys.path.insert(0, {repr(script_dir)}); '
+            f'{log_snippet}'
+            f'_log("Killing PID {shell_pid} (close_tab=True, wt_changed=True)"); '
             f'si = subprocess.STARTUPINFO(); '
             f'si.dwFlags |= subprocess.STARTF_USESHOWWINDOW; '
             f'si.wShowWindow = 0; '
-            f'subprocess.call("taskkill /F /T /PID {shell_pid}", '
+            f'rc = subprocess.call("taskkill /F /T /PID {shell_pid}", '
             f'startupinfo=si, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); '
+            f'_log("taskkill exit code: " + str(rc)); '
             f'time.sleep(3); '
             f'from context_reset import set_wt_close_on_exit; '
-            f'set_wt_close_on_exit("graceful")'
+            f'set_wt_close_on_exit("graceful"); '
+            f'_log("Restored WT closeOnExit to graceful")'
         )
     else:
         kill_script = (
-            f'import subprocess; '
+            f'import subprocess, os, datetime; '
+            f'{log_snippet}'
+            f'_log("Killing PID {shell_pid} (close_tab=False)"); '
             f'si = subprocess.STARTUPINFO(); '
             f'si.dwFlags |= subprocess.STARTF_USESHOWWINDOW; '
             f'si.wShowWindow = 0; '
-            f'subprocess.call("taskkill /F /T /PID {shell_pid}", '
-            f'startupinfo=si, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)'
+            f'rc = subprocess.call("taskkill /F /T /PID {shell_pid}", '
+            f'startupinfo=si, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); '
+            f'_log("taskkill exit code: " + str(rc))'
         )
     subprocess.Popen(
         [sys.executable, '-c', kill_script],
@@ -1227,7 +1257,12 @@ def main():
     log(f"Phase 1: launching new tab ({before} Claude processes before)")
 
     saved_hwnd = _save_foreground_window()
-    subprocess.Popen(cmd, shell=True)
+    # CREATE_NO_WINDOW + startupinfo prevents a visible cmd.exe flash
+    popen_kwargs = {"shell": True}
+    if IS_WIN:
+        popen_kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+        popen_kwargs["startupinfo"] = _si()
+    subprocess.Popen(cmd, **popen_kwargs)
     _restore_foreground_window(saved_hwnd)
     log(f"New tab opened in {launch_name}")
 
