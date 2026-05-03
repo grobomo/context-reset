@@ -390,7 +390,7 @@ with tempfile.TemporaryDirectory() as d:
         cmd3 = context_reset.build_launch_cmd(d, "p", 'title "with" quotes', "#000000")
         test("strips quotes from title", 'title with quotes' in cmd3 and not any('"with"' in c for c in cmd3))
         test("allows Claude status icon (no suppressApplicationTitle)", "--suppressApplicationTitle" not in cmd_str)
-        test("has focus-tab --previous via WT chaining", ";" in cmd and "focus-tab" in cmd and "--previous" in cmd)
+        test("no focus-tab chaining (not needed)", ";" not in cmd and "focus-tab" not in cmd)
     elif context_reset.IS_MAC:
         test("contains osascript", "osascript" in cmd)
         test("contains prompt", "test prompt" in cmd)

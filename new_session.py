@@ -815,8 +815,7 @@ def build_launch_cmd(project_dir, prompt, tab_title, tab_color):
         # Also sanitize tab title (could contain quotes from TODO.md)
         safe_title = tab_title.replace('"', '').replace("'", "")
         # Return a list — avoids shell=True and cmd.exe quote mangling.
-        # WT subcommand chaining: new-tab then focus-tab --previous so the
-        # new tab opens in the background without stealing tab focus.
+        # No focus-tab needed: wt new-tab via list Popen doesn't steal focus.
         return [
             'wt', '-w', '0', 'new-tab',
             '--title', safe_title,
@@ -825,7 +824,6 @@ def build_launch_cmd(project_dir, prompt, tab_title, tab_color):
             '--',
             'powershell', '-NoExit', '-Command',
             f"claude '{ps_escaped}'",
-            ';', 'focus-tab', '--previous',
         ]
     elif IS_MAC:
         escaped = prompt.replace("'", "'\\''")
@@ -1310,7 +1308,6 @@ def main():
         popen_kwargs = {"shell": True}
     log(f"Launch cmd: {cmd}")
     subprocess.Popen(cmd, **popen_kwargs)
-    _refocus_previous_tab()
     _restore_foreground_window(saved_hwnd)
     log(f"New tab opened in {launch_name}")
 
