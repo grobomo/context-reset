@@ -1149,6 +1149,67 @@ def record_session_chain(project_dir, old_jsonl, new_jsonl):
     log(f"Recorded session chain: {record['old_session']} -> {record['new_session']}")
 
 
+# ============ Shared Helpers ============
+
+def acquire_lock(project_dir_raw):
+    """Acquire an OS-level file lock to prevent concurrent resets.
+
+    Returns (lock_fh, lock_file) on success, or (None, None) if another
+    reset is already running. Caller must call release_lock() when done.
+    """
+    project_key = (os.path.abspath(os.path.expanduser(project_dir_raw))
+                   .replace(os.sep, "-").replace(":", "").strip("-"))
+    lock_dir = os.path.join(os.path.expanduser("~"), ".claude", "context-reset")
+    os.makedirs(lock_dir, exist_ok=True)
+    lock_file = os.path.join(lock_dir, f".lock-{project_key}")
+    lock_fh = None
+    try:
+        lock_fh = open(lock_file, "w")
+        if IS_WIN:
+            import msvcrt
+            msvcrt.locking(lock_fh.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(lock_fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        lock_fh.write(f"{os.getpid()}\n{time.time()}\n")
+        lock_fh.flush()
+        return lock_fh, lock_file
+    except (IOError, OSError):
+        log("SKIPPED: another context reset is already running (OS lock held)")
+        if lock_fh:
+            lock_fh.close()
+        return None, None
+    except Exception as e:
+        log(f"WARNING: lock acquisition failed ({e}), proceeding anyway")
+        if lock_fh:
+            lock_fh.close()
+        return None, lock_file
+
+
+def release_lock(lock_fh, lock_file):
+    """Release an OS-level file lock acquired by acquire_lock()."""
+    try:
+        if lock_fh:
+            lock_fh.close()
+        if lock_file and os.path.exists(lock_file):
+            os.remove(lock_file)
+    except Exception:
+        pass
+
+
+def resolve_project_dir(raw_dir):
+    """Resolve a raw project dir: expand ~, resolve worktrees, reject Git install dirs."""
+    project_dir = os.path.abspath(os.path.expanduser(raw_dir))
+    project_dir = _resolve_worktree_root(project_dir)
+    if 'Program Files' in project_dir and 'Git' in project_dir:
+        home = os.path.expanduser('~')
+        basename = os.path.basename(project_dir)
+        fallback = os.path.join(home, basename) if basename else home
+        log(f"WARNING: project_dir '{project_dir}' looks like Git install dir, using '{fallback}'")
+        project_dir = fallback
+    return project_dir
+
+
 # ============ Main ============
 
 def main():
@@ -1162,68 +1223,23 @@ def main():
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
-    # Exclusive OS-level file lock: prevents concurrent resets on the same project.
-    # Uses msvcrt.locking (Windows) / fcntl.flock (Unix) for atomic, crash-safe locking.
-    # If process crashes, OS auto-releases the lock — no stale-lock problem.
-    project_key = os.path.abspath(os.path.expanduser(args.project_dir)).replace(os.sep, "-").replace(":", "").strip("-")
-    lock_dir = os.path.join(os.path.expanduser("~"), ".claude", "context-reset")
-    os.makedirs(lock_dir, exist_ok=True)
-    lock_file = os.path.join(lock_dir, f".lock-{project_key}")
-    _lock_fh = None  # Keep file handle open for duration (OS lock requires it)
-    try:
-        _lock_fh = open(lock_file, "w")
-        if IS_WIN:
-            import msvcrt
-            msvcrt.locking(_lock_fh.fileno(), msvcrt.LK_NBLCK, 1)
-        else:
-            import fcntl
-            fcntl.flock(_lock_fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        _lock_fh.write(f"{os.getpid()}\n{time.time()}\n")
-        _lock_fh.flush()
-    except (IOError, OSError):
-        # Lock held by another process — another reset is in progress
-        log("SKIPPED: another context reset is already running (OS lock held)")
-        if _lock_fh:
-            _lock_fh.close()
-        return
-    except Exception as e:
-        log(f"WARNING: lock acquisition failed ({e}), proceeding anyway")
-        if _lock_fh:
-            _lock_fh.close()
-        _lock_fh = None
+    lock_fh, lock_file = acquire_lock(args.project_dir)
+    if lock_fh is None and lock_file is None:
+        return  # Another reset is running
 
     cleanup_old_logs()
 
-    project_dir = os.path.abspath(os.path.expanduser(args.project_dir))
-    project_dir = _resolve_worktree_root(project_dir)
-    # Sanity check: reject paths inside Git install dir (Git Bash CWD leak)
-    if 'Program Files' in project_dir and 'Git' in project_dir:
-        home = os.path.expanduser('~')
-        basename = os.path.basename(project_dir)
-        fallback = os.path.join(home, basename) if basename else home
-        log(f"WARNING: project_dir '{project_dir}' looks like Git install dir, using '{fallback}'")
-        project_dir = fallback
-    # Cross-project reset: save state in current project, launch in target
+    project_dir = resolve_project_dir(args.project_dir)
     launch_dir = project_dir
     if args.target_project:
-        launch_dir = _resolve_worktree_root(os.path.abspath(os.path.expanduser(args.target_project)))
+        launch_dir = resolve_project_dir(args.target_project)
         if not os.path.isdir(launch_dir):
             log(f"ERROR: target project dir does not exist: {launch_dir}")
+            release_lock(lock_fh, lock_file)
             return
         log(f"Cross-project reset: saving state in {project_dir}, launching in {launch_dir}")
 
     launch_name = os.path.basename(launch_dir)
-
-    def _remove_lock():
-        nonlocal _lock_fh
-        try:
-            if _lock_fh:
-                _lock_fh.close()  # Closing file handle releases OS lock
-                _lock_fh = None
-            if os.path.exists(lock_file):
-                os.remove(lock_file)
-        except Exception:
-            pass
 
     # Build launch command (needed for dry-run and normal mode)
     prompt = args.prompt or build_prompt(launch_dir)
@@ -1245,7 +1261,7 @@ def main():
         shell_pid = find_shell_pid()
         log(f"DRY RUN - shell PID to kill: {shell_pid}")
         log("=== Dry run complete ===")
-        _remove_lock()
+        release_lock(lock_fh, lock_file)
         return
 
     # Pre-trust the workspace so the interactive session skips the
@@ -1288,7 +1304,7 @@ def main():
     if not process_detected:
         log("WARNING: new Claude not detected after 15s")
         log("=== New session launch FAILED (no new process) ===")
-        _remove_lock()
+        release_lock(lock_fh, lock_file)
         return
 
     # Capture old session JSONL before verify (for chain recording)
@@ -1304,7 +1320,7 @@ def main():
         log("=== New session launch FAILED (no activity detected) ===")
 
     log("=== New session complete (old tab preserved) ===")
-    _remove_lock()
+    release_lock(lock_fh, lock_file)
 
 
 if __name__ == "__main__":

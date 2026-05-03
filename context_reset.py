@@ -36,6 +36,9 @@ from new_session import (
     get_newest_jsonl,
     record_session_chain,
     ensure_workspace_trusted,
+    acquire_lock,
+    release_lock,
+    resolve_project_dir,
     _save_foreground_window,
     _restore_foreground_window,
     _si,
@@ -71,54 +74,13 @@ def main():
         help="Kill current tab without launching a new one (self-close)")
     args = parser.parse_args()
 
-    # OS-level file lock to prevent concurrent resets
-    project_key = (os.path.abspath(os.path.expanduser(args.project_dir))
-                   .replace(os.sep, "-").replace(":", "").strip("-"))
-    lock_dir = os.path.join(os.path.expanduser("~"), ".claude", "context-reset")
-    os.makedirs(lock_dir, exist_ok=True)
-    lock_file = os.path.join(lock_dir, f".lock-{project_key}")
-    _lock_fh = None
-    try:
-        _lock_fh = open(lock_file, "w")
-        if IS_WIN:
-            import msvcrt
-            msvcrt.locking(_lock_fh.fileno(), msvcrt.LK_NBLCK, 1)
-        else:
-            import fcntl
-            fcntl.flock(_lock_fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        _lock_fh.write(f"{os.getpid()}\n{time.time()}\n")
-        _lock_fh.flush()
-    except (IOError, OSError):
-        log("SKIPPED: another context reset is already running (OS lock held)")
-        if _lock_fh:
-            _lock_fh.close()
-        return
-    except Exception as e:
-        log(f"WARNING: lock acquisition failed ({e}), proceeding anyway")
-        if _lock_fh:
-            _lock_fh.close()
-        _lock_fh = None
-
-    def _remove_lock():
-        nonlocal _lock_fh
-        try:
-            if _lock_fh:
-                _lock_fh.close()
-            if os.path.exists(lock_file):
-                os.remove(lock_file)
-        except Exception:
-            pass
+    lock_fh, lock_file = acquire_lock(args.project_dir)
+    if lock_fh is None and lock_file is None:
+        return  # Another reset is running
 
     cleanup_old_logs()
 
-    project_dir = os.path.abspath(os.path.expanduser(args.project_dir))
-    project_dir = _resolve_worktree_root(project_dir)
-    if 'Program Files' in project_dir and 'Git' in project_dir:
-        home = os.path.expanduser('~')
-        basename = os.path.basename(project_dir)
-        fallback = os.path.join(home, basename) if basename else home
-        log(f"WARNING: project_dir '{project_dir}' looks like Git install dir, using '{fallback}'")
-        project_dir = fallback
+    project_dir = resolve_project_dir(args.project_dir)
 
     launch_name = os.path.basename(project_dir)
 
@@ -139,7 +101,7 @@ def main():
             kill_old_tab(shell_pid, close_tab=True)
         else:
             log("WARNING: could not find shell PID to kill")
-        _remove_lock()
+        release_lock(lock_fh, lock_file)
         return
 
     # Build launch command
@@ -162,7 +124,7 @@ def main():
             log(f"  tab shell: PID {shell_pid}")
             log(f"DRY RUN - shell PID to kill: {shell_pid}")
         log("=== Dry run complete ===")
-        _remove_lock()
+        release_lock(lock_fh, lock_file)
         return
 
     # Pre-trust the workspace
@@ -195,7 +157,7 @@ def main():
     if not process_detected:
         log("WARNING: new Claude not detected after 15s, keeping old tab open")
         log("=== Context reset FAILED (no new process) ===")
-        _remove_lock()
+        release_lock(lock_fh, lock_file)
         return
 
     # Capture old session JSONL before verify
@@ -217,7 +179,7 @@ def main():
         log(f"WARNING: no transcript activity after {args.timeout}s, keeping old tab open")
         log("=== Context reset FAILED (no activity detected) ===")
 
-    _remove_lock()
+    release_lock(lock_fh, lock_file)
 
 
 if __name__ == "__main__":
