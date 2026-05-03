@@ -840,9 +840,7 @@ def build_launch_cmd(project_dir, prompt, tab_title, tab_color):
     """Build the command to open a new terminal tab with claude.
 
     On Windows: returns a list (for shell=False) to avoid cmd.exe quote
-    mangling that can spawn phantom tabs. Uses WT subcommand chaining
-    (new-tab ; focus-tab --previous) so the new tab opens in the background
-    without stealing tab focus.
+    mangling that can spawn phantom tabs.
     On macOS/Linux: returns a string (for shell=True).
     """
     if IS_WIN:
@@ -851,8 +849,9 @@ def build_launch_cmd(project_dir, prompt, tab_title, tab_color):
         # Also sanitize tab title (could contain quotes from TODO.md)
         safe_title = tab_title.replace('"', '').replace("'", "")
         # Return a list — avoids shell=True and cmd.exe quote mangling.
-        # WT subcommand chaining: new-tab then focus-tab --previous so the
-        # calling tab stays active (no focus steal within WT).
+        # No WT subcommand chaining (`;` is fragile — WT parsing varies
+        # by version and can create phantom tabs). Focus restore is handled
+        # separately via _refocus_previous_tab() after the Popen call.
         return [
             'wt', '-w', '0', 'new-tab',
             '--title', safe_title,
@@ -861,7 +860,6 @@ def build_launch_cmd(project_dir, prompt, tab_title, tab_color):
             '--',
             'powershell', '-NoExit', '-Command',
             f"claude '{ps_escaped}'",
-            ';', 'focus-tab', '--previous',
         ]
     elif IS_MAC:
         escaped = prompt.replace("'", "'\\''")
@@ -934,6 +932,26 @@ def _restore_foreground_window(hwnd, initial_delay=0.8, poll_delay=0.3):
     t.start()
 
 
+def _refocus_previous_tab():
+    """Tell Windows Terminal to focus the previous tab.
+
+    Called after launching a new tab via Popen. Uses a separate wt CLI call
+    instead of subcommand chaining (`;` in Popen args) which was unreliable
+    and could create phantom tabs.
+    """
+    if not IS_WIN:
+        return
+    try:
+        time.sleep(0.5)  # let WT finish creating the new tab
+        subprocess.Popen(
+            ['wt', '-w', '0', 'focus-tab', '--previous'],
+            startupinfo=_si(),
+        )
+        log("Sent focus-tab --previous to WT")
+    except Exception as e:
+        log(f"WARNING: focus-tab --previous failed: {e}")
+
+
 def _has_command(name):
     """Check if a command exists on PATH."""
     try:
@@ -960,12 +978,8 @@ def kill_old_tab(shell_pid, close_tab=False):
 
 
 def _kill_old_tab_windows(shell_pid, close_tab):
-    wt_changed = False
-    if close_tab:
-        wt_changed = set_wt_close_on_exit("always")
     log("=== Context reset complete ===")
 
-    script_dir = os.path.dirname(os.path.abspath(__file__))
     log_dir = repr(LOG_DIR)
     # Helper snippet for detached kill scripts to write to the daily audit log
     log_snippet = (
@@ -974,22 +988,24 @@ def _kill_old_tab_windows(shell_pid, close_tab):
         f'_lf = os.path.join(_ld, datetime.datetime.now().strftime("%Y-%m-%d") + ".log"); '
         f'_log = lambda m: open(_lf, "a").write("[" + datetime.datetime.now().strftime("%H:%M:%S") + "] [detached-kill] " + m + "\\n"); '
     )
-    if wt_changed:
+    if close_tab:
+        # Kill the shell tree, then close the dead tab with WT CLI.
+        # This avoids modifying the global closeOnExit setting which
+        # would affect ALL tabs for several seconds.
         kill_script = (
-            f'import subprocess, sys, time, os, datetime; '
-            f'sys.path.insert(0, {repr(script_dir)}); '
+            f'import subprocess, time, os, datetime; '
             f'{log_snippet}'
-            f'_log("Killing PID {shell_pid} (close_tab=True, wt_changed=True)"); '
+            f'_log("Killing PID {shell_pid} (close_tab=True)"); '
             f'si = subprocess.STARTUPINFO(); '
             f'si.dwFlags |= subprocess.STARTF_USESHOWWINDOW; '
             f'si.wShowWindow = 0; '
             f'rc = subprocess.call("taskkill /F /T /PID {shell_pid}", '
             f'startupinfo=si, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); '
             f'_log("taskkill exit code: " + str(rc)); '
-            f'time.sleep(3); '
-            f'from context_reset import set_wt_close_on_exit; '
-            f'set_wt_close_on_exit("graceful"); '
-            f'_log("Restored WT closeOnExit to graceful")'
+            f'time.sleep(0.5); '
+            f'rc2 = subprocess.call(["wt", "-w", "0", "close-tab"], '
+            f'startupinfo=si, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); '
+            f'_log("wt close-tab exit code: " + str(rc2))'
         )
     else:
         kill_script = (
@@ -1312,7 +1328,9 @@ def main():
         popen_kwargs = {}
     else:
         popen_kwargs = {"shell": True}
+    log(f"Launch cmd: {cmd}")
     subprocess.Popen(cmd, **popen_kwargs)
+    _refocus_previous_tab()
     _restore_foreground_window(saved_hwnd)
     log(f"New tab opened in {launch_name}")
 
