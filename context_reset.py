@@ -1,24 +1,224 @@
 #!/usr/bin/env python3
-"""Backward-compat alias: context_reset.py -> new_session.py
+"""Same-project context reset. ALWAYS closes the calling tab.
 
-All logic lives in new_session.py. This file exists so existing hooks
-and scripts that reference context_reset.py continue to work.
+Use this when Claude's context is full and you need a fresh session in the
+SAME project. The old tab is killed after the new session is verified working.
 
-Re-exports everything (including _private names) so `import context_reset`
-is a full drop-in for `import new_session`.
+For cross-project sessions (keeping the old tab open), use new_session.py.
+
+Usage:
+    python context_reset.py --project-dir /path/to/project
+    python context_reset.py  # uses CLAUDE_PROJECT_DIR or cwd
 """
 
-import new_session as _ns
+import argparse
+import os
+import sys
+import time
+from datetime import datetime
 
-# Re-export ALL names from new_session (including _private ones)
-# so tests and hooks that do `context_reset._tail_lines` still work.
+# Import all shared functions from new_session
+from new_session import (
+    IS_WIN,
+    LOG_DIR,
+    log,
+    cleanup_old_logs,
+    extract_session_context,
+    build_prompt,
+    build_launch_cmd,
+    get_tab_color,
+    find_shell_pid,
+    kill_old_tab,
+    count_claude_processes,
+    verify_claude_working,
+    get_project_logs_dir,
+    get_newest_jsonl,
+    record_session_chain,
+    ensure_workspace_trusted,
+    _save_foreground_window,
+    _restore_foreground_window,
+    _si,
+    _resolve_worktree_root,
+    set_wt_close_on_exit,
+)
+
+# Re-export ALL names from new_session so `import context_reset` still works
+# as a drop-in for tests and hooks that reference context_reset._tail_lines etc.
+import new_session as _ns
 for _name in dir(_ns):
-    if not _name.startswith('__'):
+    if not _name.startswith('__') and _name not in globals():
         globals()[_name] = getattr(_ns, _name)
 
-# Also make `from context_reset import X` work for any name
 def __getattr__(name):
     return getattr(_ns, name)
 
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Same-project context reset (always closes old tab)")
+    parser.add_argument(
+        "--project-dir",
+        default=os.environ.get("CLAUDE_PROJECT_DIR", os.getcwd()),
+        help="Project dir for the reset (default: CLAUDE_PROJECT_DIR or cwd)")
+    parser.add_argument("--prompt", default=None)
+    parser.add_argument(
+        "--timeout", type=int, default=45,
+        help="Phase 2 verification timeout in seconds")
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--stop", action="store_true",
+        help="Kill current tab without launching a new one (self-close)")
+    args = parser.parse_args()
+
+    # OS-level file lock to prevent concurrent resets
+    project_key = (os.path.abspath(os.path.expanduser(args.project_dir))
+                   .replace(os.sep, "-").replace(":", "").strip("-"))
+    lock_dir = os.path.join(os.path.expanduser("~"), ".claude", "context-reset")
+    os.makedirs(lock_dir, exist_ok=True)
+    lock_file = os.path.join(lock_dir, f".lock-{project_key}")
+    _lock_fh = None
+    try:
+        _lock_fh = open(lock_file, "w")
+        if IS_WIN:
+            import msvcrt
+            msvcrt.locking(_lock_fh.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(_lock_fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        _lock_fh.write(f"{os.getpid()}\n{time.time()}\n")
+        _lock_fh.flush()
+    except (IOError, OSError):
+        log("SKIPPED: another context reset is already running (OS lock held)")
+        if _lock_fh:
+            _lock_fh.close()
+        return
+    except Exception as e:
+        log(f"WARNING: lock acquisition failed ({e}), proceeding anyway")
+        if _lock_fh:
+            _lock_fh.close()
+        _lock_fh = None
+
+    def _remove_lock():
+        nonlocal _lock_fh
+        try:
+            if _lock_fh:
+                _lock_fh.close()
+            if os.path.exists(lock_file):
+                os.remove(lock_file)
+        except Exception:
+            pass
+
+    cleanup_old_logs()
+
+    project_dir = os.path.abspath(os.path.expanduser(args.project_dir))
+    project_dir = _resolve_worktree_root(project_dir)
+    if 'Program Files' in project_dir and 'Git' in project_dir:
+        home = os.path.expanduser('~')
+        basename = os.path.basename(project_dir)
+        fallback = os.path.join(home, basename) if basename else home
+        log(f"WARNING: project_dir '{project_dir}' looks like Git install dir, using '{fallback}'")
+        project_dir = fallback
+
+    launch_name = os.path.basename(project_dir)
+
+    # --stop mode: kill current tab, no new session
+    if args.stop:
+        log(f"=== Stopping tab for {launch_name} ===")
+        context = extract_session_context(project_dir)
+        if context:
+            state_path = os.path.join(project_dir, "SESSION_STATE.md")
+            with open(state_path, "w", encoding="utf-8") as f:
+                f.write(f"# Session State (auto-generated by context-reset)\n\n")
+                f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+                f.write(f"## Last Session Conversation\n\n{context}\n")
+            log(f"Saved session state to {state_path}")
+        shell_pid = find_shell_pid()
+        if shell_pid:
+            log(f"Killing current tab (shell PID {shell_pid})")
+            kill_old_tab(shell_pid, close_tab=True)
+        else:
+            log("WARNING: could not find shell PID to kill")
+        _remove_lock()
+        return
+
+    # Build launch command
+    prompt = args.prompt or build_prompt(project_dir)
+    log(f"=== Context reset started for {launch_name} ===")
+    log(f"Project dir: {project_dir}")
+    log(f"Close old tab: True (context_reset always closes)")
+
+    tab_title = launch_name
+    tab_color = get_tab_color(project_dir)
+
+    cmd = build_launch_cmd(project_dir, prompt, tab_title, tab_color)
+    log(f"Prompt: {prompt[:80]}...")
+    log(f"Tab: title='{tab_title}', color={tab_color}")
+
+    if args.dry_run:
+        log(f"DRY RUN - command: {cmd}")
+        shell_pid = find_shell_pid()
+        if shell_pid:
+            log(f"  tab shell: PID {shell_pid}")
+            log(f"DRY RUN - shell PID to kill: {shell_pid}")
+        log("=== Dry run complete ===")
+        _remove_lock()
+        return
+
+    # Pre-trust the workspace
+    ensure_workspace_trusted(project_dir)
+
+    # Phase 1: Launch new tab
+    before = count_claude_processes()
+    log(f"Phase 1: launching new tab ({before} Claude processes before)")
+
+    saved_hwnd = _save_foreground_window()
+    import subprocess
+    popen_kwargs = {"shell": True}
+    if IS_WIN:
+        popen_kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+        popen_kwargs["startupinfo"] = _si()
+    subprocess.Popen(cmd, **popen_kwargs)
+    _restore_foreground_window(saved_hwnd)
+    log(f"New tab opened in {launch_name}")
+
+    # Phase 1b: Wait for new process
+    log("Phase 1b: waiting for new Claude process (up to 15s)...")
+    process_detected = False
+    for i in range(15):
+        time.sleep(1)
+        after = count_claude_processes()
+        if after > before:
+            log(f"New Claude process detected ({after} total, was {before})")
+            process_detected = True
+            break
+
+    if not process_detected:
+        log("WARNING: new Claude not detected after 15s, keeping old tab open")
+        log("=== Context reset FAILED (no new process) ===")
+        _remove_lock()
+        return
+
+    # Capture old session JSONL before verify
+    old_jsonl, _ = get_newest_jsonl(get_project_logs_dir(project_dir))
+
+    # Phase 2: Verify working
+    new_jsonl = verify_claude_working(project_dir, timeout=args.timeout)
+    if new_jsonl:
+        log("New Claude confirmed working")
+        record_session_chain(project_dir, old_jsonl, new_jsonl)
+        shell_pid = find_shell_pid()
+        if shell_pid:
+            log(f"Closing old tab (shell PID {shell_pid})")
+            kill_old_tab(shell_pid, close_tab=True)
+        else:
+            log("WARNING: could not find shell PID, keeping old tab open")
+            log("=== Context reset PARTIAL (new tab working, old tab kept) ===")
+    else:
+        log(f"WARNING: no transcript activity after {args.timeout}s, keeping old tab open")
+        log("=== Context reset FAILED (no activity detected) ===")
+
+    _remove_lock()
+
+
 if __name__ == "__main__":
-    _ns.main()
+    main()

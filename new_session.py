@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 """
-new-session: Launch a new Claude Code session in any project.
+new-session: Launch a new Claude Code session in any project. NEVER closes the calling tab.
 
-Opens a fresh Claude tab for the same project (context reset) or a different
-project (project switch). Preserves continuity via SESSION_STATE.md + TODO.md.
+Opens a fresh Claude tab for the same or a different project. The calling tab
+is kept open — use context_reset.py instead for same-project resets that close
+the old tab.
+
+Preserves continuity via SESSION_STATE.md + TODO.md.
 
 Usage:
-    python new_session.py --project-dir /path/to/project
-    python new_session.py --project-dir /path/to/other/project  # switch projects
+    python new_session.py --project-dir /current/project --target-project /other/project
+    python new_session.py --project-dir /path/to/project  # new session, same project
 
 1. Opens a new terminal tab/window with fresh Claude in the project dir
 2. Waits for the new Claude process to start (process count check)
 3. Verifies the new session is working (transcript file activity)
-4. Kills the old tab's shell process tree (closes old tab)
+4. Old tab is preserved (never killed)
 
 Supported platforms: Windows (Windows Terminal), macOS (Terminal.app/iTerm2),
 Linux (gnome-terminal, or plain background process).
@@ -978,6 +981,28 @@ def _kill_old_tab_unix(shell_pid):
     sys.exit(0)
 
 
+# ============ Worktree Resolution ============
+
+def _resolve_worktree_root(project_dir):
+    """If project_dir is inside .claude/worktrees/, resolve to the project root.
+
+    Claude Code worktrees live at <project>/.claude/worktrees/<name>/. When
+    CLAUDE_PROJECT_DIR points there, the new session should open in <project>/
+    so hook-runner path checks work and the session starts at the real root.
+
+    Returns the resolved path, or project_dir unchanged if not in a worktree.
+    """
+    normalized = project_dir.replace("\\", "/")
+    marker = "/.claude/worktrees/"
+    idx = normalized.find(marker)
+    if idx != -1:
+        root = project_dir[:idx]
+        worktree_name = normalized[idx + len(marker):].rstrip("/").split("/")[0]
+        log(f"Detected worktree path, resolving to project root: {root} (worktree: {worktree_name})")
+        return root
+    return project_dir
+
+
 # ============ Transcript Verification ============
 
 def get_project_logs_dir(project_dir):
@@ -1103,15 +1128,8 @@ def main():
     parser.add_argument("--target-project", default=None,
                         help="Switch to a different project dir for the new session (cross-project reset)")
     parser.add_argument("--prompt", default=None)
-    parser.add_argument("--no-close", action="store_true", help="Don't close old tab")
-    parser.add_argument("--preserve", action="store_true",
-                        help="One-shot: keep old tab open this time only (also triggered by ~/.claude/.preserve-tab file)")
-    parser.add_argument("--close-tab", action="store_true",
-                        help="Auto-close terminal tab (Windows: sets WT closeOnExit=always temporarily)")
     parser.add_argument("--timeout", type=int, default=45, help="Phase 2 verification timeout in seconds")
     parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--stop", action="store_true",
-                        help="Kill current tab without launching a new one (self-close)")
     args = parser.parse_args()
 
     # Exclusive OS-level file lock: prevents concurrent resets on the same project.
@@ -1144,19 +1162,10 @@ def main():
             _lock_fh.close()
         _lock_fh = None
 
-    # One-shot preserve: check for flag file
-    preserve_flag = os.path.join(os.path.expanduser("~"), ".claude", ".preserve-tab")
-    if os.path.exists(preserve_flag):
-        args.preserve = True
-        try:
-            os.remove(preserve_flag)
-            log("One-shot preserve: found .preserve-tab flag file, will keep old tab")
-        except Exception:
-            pass
-
     cleanup_old_logs()
 
     project_dir = os.path.abspath(os.path.expanduser(args.project_dir))
+    project_dir = _resolve_worktree_root(project_dir)
     # Sanity check: reject paths inside Git install dir (Git Bash CWD leak)
     if 'Program Files' in project_dir and 'Git' in project_dir:
         home = os.path.expanduser('~')
@@ -1167,7 +1176,7 @@ def main():
     # Cross-project reset: save state in current project, launch in target
     launch_dir = project_dir
     if args.target_project:
-        launch_dir = os.path.abspath(os.path.expanduser(args.target_project))
+        launch_dir = _resolve_worktree_root(os.path.abspath(os.path.expanduser(args.target_project)))
         if not os.path.isdir(launch_dir):
             log(f"ERROR: target project dir does not exist: {launch_dir}")
             return
@@ -1186,35 +1195,15 @@ def main():
         except Exception:
             pass
 
-    if args.stop:
-        log(f"=== Stop mode: closing current tab for {launch_name} ===")
-        # Save session state before dying
-        context = extract_session_context(project_dir)
-        if context:
-            state_path = os.path.join(project_dir, "SESSION_STATE.md")
-            with open(state_path, "w", encoding="utf-8") as f:
-                f.write(f"# Session State (auto-generated by context-reset)\n\n")
-                f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-                f.write(f"## Last Session Conversation\n\n{context}\n")
-            log(f"Saved session state to {state_path}")
-        shell_pid = find_shell_pid()
-        if shell_pid:
-            log(f"Killing current tab (shell PID {shell_pid})")
-            kill_old_tab(shell_pid, close_tab=args.close_tab)
-        else:
-            log("WARNING: could not find shell PID to kill")
-        _remove_lock()
-        return
-
     # Build launch command (needed for dry-run and normal mode)
     prompt = args.prompt or build_prompt(launch_dir)
-    log(f"=== Context reset started for {launch_name} ===")
+    log(f"=== New session started for {launch_name} ===")
     log(f"Project dir (state): {project_dir}")
     if launch_dir != project_dir:
         log(f"Target dir (launch): {launch_dir}")
     log(f"Platform: {sys.platform}")
     log(f"Prompt: {prompt[:80]}...")
-    log(f"Close old tab: {not args.no_close}")
+    log(f"Close old tab: False (new_session never closes)")
 
     tab_title = launch_name
     tab_color = get_tab_color(launch_dir)
@@ -1242,21 +1231,13 @@ def main():
     _restore_foreground_window(saved_hwnd)
     log(f"New tab opened in {launch_name}")
 
-    if args.no_close or args.preserve:
-        mode = "preserve (one-shot)" if args.preserve else "no-close"
-        log(f"--{mode} mode, keeping old tab open")
-        # Signal the stop hook to let this tab idle instead of blocking with
-        # "DO NOT STOP / keep working". One-shot flag, consumed on first read.
-        idle_flag = os.path.join(os.path.expanduser("~"), ".claude", ".preserved-tab-idle")
-        try:
-            with open(idle_flag, "w") as f:
-                f.write(f"Preserved at {datetime.now().isoformat()} for review\n")
-            log("Set .preserved-tab-idle flag (stop hook will allow idle)")
-        except Exception:
-            pass
-        log(f"=== Context reset complete ({mode}) ===")
-        _remove_lock()
-        return
+    # Signal the stop hook to let this tab idle (new_session never kills old tab)
+    idle_flag = os.path.join(os.path.expanduser("~"), ".claude", ".preserved-tab-idle")
+    try:
+        with open(idle_flag, "w") as f:
+            f.write(f"New session launched at {datetime.now().isoformat()}\n")
+    except Exception:
+        pass
 
     # Phase 1b: Wait for new process
     log("Phase 1b: waiting for new Claude process (up to 15s)...")
@@ -1270,8 +1251,8 @@ def main():
             break
 
     if not process_detected:
-        log("WARNING: new Claude not detected after 15s, keeping old tab open")
-        log("=== Context reset FAILED (no new process) ===")
+        log("WARNING: new Claude not detected after 15s")
+        log("=== New session launch FAILED (no new process) ===")
         _remove_lock()
         return
 
@@ -1282,19 +1263,12 @@ def main():
     new_jsonl = verify_claude_working(launch_dir, timeout=args.timeout)
     if new_jsonl:
         log("New Claude confirmed working")
-        # Record the session chain for chat-export stitching
         record_session_chain(launch_dir, old_jsonl, new_jsonl)
-        shell_pid = find_shell_pid()
-        if shell_pid:
-            log(f"Closing old tab (shell PID {shell_pid})")
-            kill_old_tab(shell_pid, close_tab=args.close_tab)
-        else:
-            log("WARNING: could not find shell PID, keeping old tab open")
-            log("=== Context reset PARTIAL (new tab working, old tab kept) ===")
     else:
-        log(f"WARNING: no transcript activity after {args.timeout}s, keeping old tab open")
-        log("=== Context reset FAILED (no activity detected) ===")
+        log(f"WARNING: no transcript activity after {args.timeout}s")
+        log("=== New session launch FAILED (no activity detected) ===")
 
+    log("=== New session complete (old tab preserved) ===")
     _remove_lock()
 
 
