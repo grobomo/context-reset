@@ -840,7 +840,9 @@ def build_launch_cmd(project_dir, prompt, tab_title, tab_color):
     """Build the command to open a new terminal tab with claude.
 
     On Windows: returns a list (for shell=False) to avoid cmd.exe quote
-    mangling that can spawn phantom tabs.
+    mangling that can spawn phantom tabs. Uses WT subcommand chaining
+    (new-tab ; focus-tab --previous) so the new tab opens in the background
+    without stealing tab focus.
     On macOS/Linux: returns a string (for shell=True).
     """
     if IS_WIN:
@@ -848,15 +850,18 @@ def build_launch_cmd(project_dir, prompt, tab_title, tab_color):
         ps_escaped = prompt.replace("'", "''")
         # Also sanitize tab title (could contain quotes from TODO.md)
         safe_title = tab_title.replace('"', '').replace("'", "")
-        # Return a list — avoids shell=True and cmd.exe quote mangling
+        # Return a list — avoids shell=True and cmd.exe quote mangling.
+        # WT subcommand chaining: new-tab then focus-tab --previous so the
+        # calling tab stays active (no focus steal within WT).
         return [
-            'wt', 'new-tab',
+            'wt', '-w', '0', 'new-tab',
             '--title', safe_title,
             '--tabColor', tab_color,
             '--startingDirectory', project_dir,
             '--',
             'powershell', '-NoExit', '-Command',
             f"claude '{ps_escaped}'",
+            ';', 'focus-tab', '--previous',
         ]
     elif IS_MAC:
         escaped = prompt.replace("'", "'\\''")
@@ -1283,13 +1288,11 @@ def main():
     log(f"Phase 1: launching new tab ({before} Claude processes before)")
 
     saved_hwnd = _save_foreground_window()
-    # On Windows: cmd is a list, use shell=False to avoid cmd.exe quote mangling
-    # On macOS/Linux: cmd is a string, use shell=True
+    # On Windows: cmd is a list starting with wt (GUI app). No shell, no
+    # CREATE_NO_WINDOW (console-only flag that breaks wt COM IPC, causing
+    # phantom WT windows). On macOS/Linux: string with shell=True.
     if IS_WIN:
-        popen_kwargs = {
-            "creationflags": subprocess.CREATE_NO_WINDOW,
-            "startupinfo": _si(),
-        }
+        popen_kwargs = {}
     else:
         popen_kwargs = {"shell": True}
     subprocess.Popen(cmd, **popen_kwargs)
