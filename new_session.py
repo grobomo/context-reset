@@ -510,42 +510,6 @@ def _si():
     return None
 
 
-# ============ Windows Terminal Helpers ============
-
-def get_wt_settings_path():
-    """Return the path to Windows Terminal's settings.json."""
-    return os.path.join(
-        os.environ.get("LOCALAPPDATA", ""),
-        "Packages", "Microsoft.WindowsTerminal_8wekyb3d8bbwe",
-        "LocalState", "settings.json"
-    )
-
-
-def set_wt_close_on_exit(mode):
-    """Set Windows Terminal's closeOnExit in profile defaults.
-
-    Modes: "graceful" (default) - only close on exit 0, tab stays open on error
-           "always"             - always close tab when process exits
-           "never"              - never auto-close
-    """
-    path = get_wt_settings_path()
-    if not os.path.exists(path):
-        log(f"WARNING: Windows Terminal settings not found at {path}")
-        return False
-    try:
-        with open(path, 'r', encoding='utf-8') as f:
-            settings = json.load(f)
-        defaults = settings.setdefault("profiles", {}).setdefault("defaults", {})
-        old = defaults.get("closeOnExit", "graceful")
-        defaults["closeOnExit"] = mode
-        with open(path, 'w', encoding='utf-8') as f:
-            json.dump(settings, f, indent=4, ensure_ascii=False)
-        log(f"Windows Terminal closeOnExit: {old} -> {mode}")
-        return True
-    except Exception as e:
-        log(f"WARNING: failed to update WT settings: {e}")
-        return False
-
 
 # ============ Platform: Process Management ============
 
