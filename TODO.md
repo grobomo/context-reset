@@ -180,11 +180,12 @@ Goal: share this system with others who aren't on Windows Terminal.
 - [ ] T005: Mac support — Terminal.app / iTerm2 tab management (osascript exists but untested end-to-end)
 - [ ] T006: Linux support — gnome-terminal / tmux / screen session management
 - [ ] T007: Auto-detect platform and select correct launch method without user config
-- [ ] T008: Test end-to-end on Mac (need a Mac tester or CI)
-- [ ] T009: Test end-to-end on native Linux (gnome-terminal)
-- [ ] T010: Test end-to-end on WSL2 (route through Windows Terminal)
-- [ ] T011: Update README with cross-platform install + usage docs
-- [ ] T012: Package for pip install with platform-appropriate defaults
+- [ ] T008: EC2 test — spin up macOS EC2 (mac1.metal or mac2.metal), install Claude Code, run test suite + dry-run, verify osascript tab launch
+- [ ] T009: EC2 test — spin up Amazon Linux 2 EC2, install Claude Code, run test suite + dry-run, verify gnome-terminal/tmux fallback
+- [ ] T010: EC2 test — spin up Windows Server EC2, install Windows Terminal + Claude Code, run test suite + live context reset, verify tab close
+- [ ] T011: Test end-to-end on WSL2 (route through Windows Terminal via wt.exe from WSL)
+- [ ] T012: Update README with cross-platform install + usage docs
+- [ ] T013: Package for pip install with platform-appropriate defaults
 
 ## Launch UX Fixes (017)
 
