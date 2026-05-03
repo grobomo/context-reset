@@ -130,3 +130,74 @@ Branch: `001-T001-add-chain-recording` (already created).
 ## Pretrust Full Format (010)
 
 - [x] T001: Write all 10 native fields in ensure_workspace_trusted (PR #22)
+
+## Pip Packaging for Team Distribution (012)
+
+- [x] T001: Create pyproject.toml with CLI entry points (`new-session`, `context-reset`) (PR #24)
+- [x] T002: Add Quick Start section to README (pip install + stop hook JSON snippet) (PR #24)
+- [x] T003: Fresh venv install from GitHub URL verified
+
+## Bootstrap Script for Team Onboarding (013)
+
+- [x] T001: PowerShell bootstrap.ps1 — checks prereqs, installs Claude Code + context-reset, configures stop hook (PR #25)
+- [x] T002: configure_hook.py — BOM-free JSON writes, works in constrained language mode (PR #25)
+- [x] T003: Idempotent — second run skips already-installed components and existing hooks
+
+## Simplify openclaw-checkin.py (014)
+
+Reduce friction for Claude Code to report status to OpenClaw.
+
+- [x] T001: Make --fire-and-forget the default, add --wait flag to opt out
+- [x] T002: Auto-detect project from CLAUDE_PROJECT_DIR env var (no --project needed)
+- [x] T003: Add positional arg interface: `openclaw-checkin done "brief summary"` as shorthand
+- [x] T004: Auto-detect task ID from TODO.md "in-progress" items if --task not given
+- [x] T005: Update stop-message.txt with simplified syntax
+- [x] T006: Test all changes (all CLI + unit tests pass, 96 existing tests pass)
+- [x] T007: Copy updated files to ~/.claude/scripts/ and ~/.claude/hooks/run-modules/Stop/
+
+## Split Reset vs New Session (011)
+
+Two scripts, two behaviors, no ambiguity:
+- `context_reset.py` — same-project reset. ALWAYS closes calling tab.
+- `new_session.py` — cross-project session. NEVER closes calling tab.
+
+- [ ] T001: context_reset.py — remove preserve-tab flag file check, always set close_old_tab=True
+- [ ] T002: new_session.py — always set close_old_tab=False, ignore preserve-tab flag
+- [ ] T003: Remove backward-compat alias (context_reset.py should NOT call new_session.py anymore)
+- [ ] T004: Update tests for new behaviors
+- [ ] T005: Update CLAUDE.md and README with the two-script model
+
+## Cross-Platform Support (016)
+
+Full Mac, WSL, and Linux support for the entire Claude Code management system — not just new_session.py (which already has basic cross-platform), but openclaw-checkin.py, stop-message.txt paths, and the overall workflow.
+
+Goal: share this system with others who aren't on Windows Terminal.
+
+- [ ] T001: Audit all scripts for Windows-only assumptions (wt, powershell, C:\ paths, taskkill)
+- [ ] T002: openclaw-checkin.py — make paths portable (no hardcoded C:\Users\joelg paths)
+- [ ] T003: stop-message.txt — use env vars / relative paths instead of absolute Windows paths
+- [ ] T004: WSL support — detect WSL and route through wt.exe (WSL can call Windows executables)
+- [ ] T005: Mac support — Terminal.app / iTerm2 tab management (osascript exists but untested end-to-end)
+- [ ] T006: Linux support — gnome-terminal / tmux / screen session management
+- [ ] T007: Auto-detect platform and select correct launch method without user config
+- [ ] T008: Test end-to-end on Mac (need a Mac tester or CI)
+- [ ] T009: Test end-to-end on native Linux (gnome-terminal)
+- [ ] T010: Test end-to-end on WSL2 (route through Windows Terminal)
+- [ ] T011: Update README with cross-platform install + usage docs
+- [ ] T012: Package for pip install with platform-appropriate defaults
+
+## Headless Launch & Focus Fix (017)
+
+Fix two UX regressions: (1) `subprocess.Popen(cmd, shell=True)` at launch creates a visible cmd.exe flash ("second tab"), (2) WT steals focus after _restore_foreground_window succeeds because WT tab creation is async and re-steals focus ~0.5s later.
+
+- [x] T001: Hide cmd.exe flash — add CREATE_NO_WINDOW + startupinfo to launch Popen (PR #28)
+- [x] T002: Fix focus restore — run in background thread with ALT-key trick, retry for 3s to outlast WT's async focus steal (PR #28)
+- [x] T003: Add logging to detached kill subprocess — write what/when to context-reset log file (PR #28)
+
+## Worktree Launch Bug (018)
+
+Context-reset opens Claude inside `.claude/worktrees/<name>/` instead of the project root with worktree active. Observed in openclaw T035-watchdog-fixes session. Expected: `claude` opens in project root, then `EnterWorktree` activates the worktree. Actual: Claude opens with CWD inside the worktree subdirectory. This breaks hook-runner path checks that rely on CLAUDE_PROJECT_DIR pointing to the project root. Filed as hook-runner T551.
+
+- [x] T001: Investigate how context-reset determines CWD for new session — if CWD is a worktree subdir, walk up to find the git root (parent of `.claude/worktrees/`) (PR #29)
+- [x] T002: Add worktree detection to new_session.py — if project_dir is inside `.claude/worktrees/`, resolve to the parent project root (PR #29)
+- [ ] T003: Test with openclaw worktree scenario end-to-end
