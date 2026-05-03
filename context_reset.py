@@ -41,6 +41,7 @@ from new_session import (
     resolve_project_dir,
     _save_foreground_window,
     _restore_foreground_window,
+    _refocus_previous_tab,
     _si,
     _resolve_worktree_root,
     set_wt_close_on_exit,
@@ -149,6 +150,7 @@ def main():
         popen_kwargs = {"shell": True}
     log(f"Launch cmd: {cmd}")
     subprocess.Popen(cmd, **popen_kwargs)
+    _refocus_previous_tab()
     _restore_foreground_window(saved_hwnd)
     log(f"New tab opened in {launch_name}")
 
