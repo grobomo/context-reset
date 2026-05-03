@@ -689,6 +689,44 @@ context_reset.IS_WSL = orig_is_wsl
 context_reset.IS_WIN = orig_is_win
 context_reset.IS_MAC = orig_is_mac
 
+# --- _log_caller_context ---
+print("\n=== _log_caller_context ===")
+# Capture log output to verify it includes script name + ancestor chain
+captured_logs = []
+orig_log = context_reset.log
+context_reset.log = lambda msg: captured_logs.append(msg)
+orig_argv = sys.argv
+try:
+    sys.argv = ['/some/path/new_session.py', '--project-dir', '/tmp/foo']
+    os.environ.pop('CLAUDE_PROJECT_DIR', None)
+    context_reset._log_caller_context()
+    joined = "\n".join(captured_logs)
+    test("logs script basename (Invoked as)",
+         "Invoked as: new_session.py" in joined)
+    test("logs argv tail",
+         "--project-dir" in joined and "/tmp/foo" in joined)
+    test("logs caller chain (at least one ancestor)",
+         "caller chain:" in joined)
+
+    captured_logs.clear()
+    os.environ['CLAUDE_PROJECT_DIR'] = '/some/dd-lab/path'
+    context_reset._log_caller_context()
+    joined = "\n".join(captured_logs)
+    test("logs CLAUDE_PROJECT_DIR when set",
+         "CLAUDE_PROJECT_DIR env: /some/dd-lab/path" in joined)
+    os.environ.pop('CLAUDE_PROJECT_DIR', None)
+
+    # Different argv -> different script name in log
+    captured_logs.clear()
+    sys.argv = ['/other/context_reset.py']
+    context_reset._log_caller_context()
+    joined = "\n".join(captured_logs)
+    test("logs context_reset.py when invoked as such",
+         "Invoked as: context_reset.py" in joined)
+finally:
+    context_reset.log = orig_log
+    sys.argv = orig_argv
+
 # --- Summary ---
 print(f"\n{'='*40}")
 print(f"Results: {PASS} passed, {FAIL} failed")

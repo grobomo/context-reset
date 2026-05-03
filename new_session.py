@@ -677,6 +677,35 @@ def get_process_parent_and_name(pid):
     return None, None
 
 
+def _log_caller_context():
+    """Log who invoked us so it's possible to trace 'which tab fired this reset'.
+
+    Records:
+      - the script entry point (sys.argv[0] basename) so new_session vs
+        context_reset is unambiguous in the audit log
+      - the ancestor process chain up to 4 levels (caller shell / hook / tab)
+      - CLAUDE_PROJECT_DIR if set
+    """
+    try:
+        script = os.path.basename(sys.argv[0]) or "<unknown>"
+        log(f"Invoked as: {script}  (argv: {sys.argv[1:]})")
+        cpd = os.environ.get('CLAUDE_PROJECT_DIR')
+        if cpd:
+            log(f"  CLAUDE_PROJECT_DIR env: {cpd}")
+        chain = []
+        pid = os.getpid()
+        for _ in range(4):
+            parent_pid, parent_name = get_process_parent_and_name(pid)
+            if not parent_pid or parent_pid <= 0:
+                break
+            chain.append(f"{parent_pid} ({parent_name})")
+            pid = parent_pid
+        if chain:
+            log("  caller chain: " + " <- ".join(chain))
+    except Exception as e:
+        log(f"  caller context: failed to capture ({e})")
+
+
 def find_shell_pid():
     """Find the terminal tab's shell PID.
 
@@ -1360,6 +1389,11 @@ def main():
     parser.add_argument("--stop", action="store_true",
                         help="Kill current tab without launching a new one (self-close)")
     args = parser.parse_args()
+
+    # Log who invoked us first thing so the audit log can answer
+    # "which tab triggered this reset?" — useful when more than one tab is
+    # in play (e.g. dd-lab vs context-reset both calling at once).
+    _log_caller_context()
 
     # Exclusive OS-level file lock: prevents concurrent resets on the same project.
     # Uses msvcrt.locking (Windows) / fcntl.flock (Unix) for atomic, crash-safe locking.
