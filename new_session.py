@@ -1256,6 +1256,12 @@ def main():
     cleanup_old_logs()
 
     project_dir = resolve_project_dir(args.project_dir)
+
+    if not os.path.isdir(project_dir):
+        log(f"ERROR: project dir does not exist: {project_dir}")
+        release_lock(lock_fh, lock_file)
+        return
+
     launch_dir = project_dir
     if args.target_project:
         launch_dir = resolve_project_dir(args.target_project)

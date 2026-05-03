@@ -453,6 +453,33 @@ with tempfile.TemporaryDirectory() as d:
     )
     test("new_session rejects --stop", result_stop.returncode != 0)
 
+# --- non-existent directory check ---
+print("\n=== non-existent directory check ===")
+fake_dir = os.path.join(tempfile.gettempdir(), "context-reset-nonexistent-dir-test")
+# Ensure it doesn't exist
+if os.path.exists(fake_dir):
+    os.rmdir(fake_dir)
+
+result_cr = subprocess.run(
+    [sys.executable, "context_reset.py", "--project-dir", fake_dir],
+    capture_output=True, text=True, cwd=project_root
+)
+test("context_reset rejects non-existent dir", "ERROR: project dir does not exist" in result_cr.stdout)
+
+result_ns = subprocess.run(
+    [sys.executable, "new_session.py", "--project-dir", fake_dir],
+    capture_output=True, text=True, cwd=project_root
+)
+test("new_session rejects non-existent dir", "ERROR: project dir does not exist" in result_ns.stdout)
+
+# Also test --target-project with non-existent dir
+with tempfile.TemporaryDirectory() as valid_dir:
+    result_tp = subprocess.run(
+        [sys.executable, "new_session.py", "--project-dir", valid_dir, "--target-project", fake_dir],
+        capture_output=True, text=True, cwd=project_root
+    )
+    test("new_session rejects non-existent target-project", "ERROR: target project dir does not exist" in result_tp.stdout)
+
 # --- record_session_chain ---
 print("\n=== record_session_chain ===")
 with tempfile.TemporaryDirectory() as d:

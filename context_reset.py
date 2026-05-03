@@ -82,6 +82,11 @@ def main():
 
     project_dir = resolve_project_dir(args.project_dir)
 
+    if not os.path.isdir(project_dir):
+        log(f"ERROR: project dir does not exist: {project_dir}")
+        release_lock(lock_fh, lock_file)
+        return
+
     launch_name = os.path.basename(project_dir)
 
     # --stop mode: kill current tab, no new session
