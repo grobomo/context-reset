@@ -193,5 +193,6 @@ Goal: share this system with others who aren't on Windows Terminal.
 After the context reset that produced this TODO, verify in the new tab:
 - [ ] V001: Tab uses Ubuntu profile — font + colors match the user's normal Ubuntu tab (not PowerShell default)
 - [ ] V002: No permission prompt for `python3` on session start (requires user to add `permissions.defaultMode: "bypassPermissions"` to `/home/ubu/.claude/settings.json`)
-- [ ] V003: Old tab actually closed (kill-tree fix worked) — confirmed if this session is the only context-reset tab open
+- [ ] V003: Old tab actually closed (kill-tree fix worked) — KNOWN FAILURE this run, see T015
 - [ ] V004: SESSION_STATE.md was readable and useful (transcript handoff intact)
+- [ ] T015: Fix `_find_shell_pid_unix` for WSL — when `wt.exe` launches `wsl.exe -- bash -lc 'claude ...'`, bash exits after exec'ing claude, so the tab shell IS claude itself. Current detection walks: python3 → bash → claude → relay → sessionleader → systemd and gives up because none look like a "tab shell". Should recognize: parent chain ending at systemd/sessionleader where the highest-up process is `claude` means `claude` is the kill target. Then kill claude → relay → sessionleader as the descendant set.
