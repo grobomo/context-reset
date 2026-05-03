@@ -13,7 +13,8 @@ Both share utility functions from `new_session.py`. No dependencies beyond Pytho
 
 - **Pre-trust**: Checks `~/.claude.json` for workspace trust. Claude Code walks parent directories, so a trusted parent (e.g. `~/Documents/ProjectsCL1`) covers all children. Only writes a new entry if no ancestor is trusted.
 - **Worktree resolution**: If `CLAUDE_PROJECT_DIR` points inside `.claude/worktrees/<name>/`, resolves to the parent project root before launching.
-- **Phase 1**: Launch new terminal tab with `claude '<prompt>'` (headless: `CREATE_NO_WINDOW` prevents cmd.exe flash)
+- **Dir check**: Verifies target directory exists before launching (prevents WT error 0x8007010b).
+- **Phase 1**: Launch new terminal tab with `claude '<prompt>'` via `wt new-tab` (list-based Popen, no shell). Focus restored via separate `wt focus-tab --previous` call + OS-level window restore.
 - **Phase 1b**: Wait for new Claude process (process count check, 15s timeout)
 - **Phase 2**: Verify new session is active (transcript file growth, configurable timeout)
 - **Kill** (`context_reset.py` only): Close old tab's shell process tree (detached subprocess on Windows, SIGTERM on Unix)
@@ -51,14 +52,14 @@ The prompt tells the new session to read SESSION_STATE.md (transcript context) a
 - **Detached kill on Windows**: `taskkill /T` would kill us too, so the kill runs in a detached Python subprocess.
 - **Tab title**: Initial title set via `wt new-tab --title "folder-name"`. Claude Code overwrites with its status icon title during the session. OSC escape sequences from hooks don't reach the terminal (stderr is captured by Claude Code), so hook-based title setting doesn't work. Tab color is the persistent project identifier.
 - **Tab colors**: Persistent per-project colors from a 10-color earth-tone palette, stored in `~/.claude/context-reset/color-map.json`.
-- **Focus preservation**: Saves/restores foreground window on Windows via background thread with ALT-key trick (10 retries over 3s to outlast WT's async focus steal).
+- **Focus preservation**: Two layers: (1) `wt focus-tab --previous` restores WT tab focus, (2) background thread with ALT-key trick restores OS window focus (10 retries over 3s).
 - **Safety**: Won't kill a shell that owns multiple Claude processes.
 - **Session state handoff**: Before launching the new tab, reads the last ~500 JSONL lines from the transcript (efficient reverse-read, no full file load), parses them into clean readable conversation text (user messages, Claude responses, tool summaries, hook firings, boundaries), and writes `SESSION_STATE.md` capped at ~8K tokens so the next session can actually read it.
 
 ## Testing
 
 ```bash
-python scripts/test.py    # 108 tests
+python scripts/test.py    # 113 tests
 python context_reset.py --project-dir . --dry-run   # verify reset command
 python new_session.py --project-dir . --dry-run     # verify new session command
 ```

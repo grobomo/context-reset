@@ -44,7 +44,6 @@ from new_session import (
     _refocus_previous_tab,
     _si,
     _resolve_worktree_root,
-    set_wt_close_on_exit,
 )
 
 # Re-export ALL names from new_session so `import context_reset` still works
