@@ -813,9 +813,8 @@ def build_launch_cmd(project_dir, prompt, tab_title, tab_color):
         # Also sanitize tab title (could contain quotes from TODO.md)
         safe_title = tab_title.replace('"', '').replace("'", "")
         # Return a list — avoids shell=True and cmd.exe quote mangling.
-        # No WT subcommand chaining (`;` is fragile — WT parsing varies
-        # by version and can create phantom tabs). Focus restore is handled
-        # separately via _refocus_previous_tab() after the Popen call.
+        # WT subcommand chaining: new-tab then focus-tab --previous so the
+        # new tab opens in the background without stealing tab focus.
         return [
             'wt', '-w', '0', 'new-tab',
             '--title', safe_title,
@@ -824,6 +823,7 @@ def build_launch_cmd(project_dir, prompt, tab_title, tab_color):
             '--',
             'powershell', '-NoExit', '-Command',
             f"claude '{ps_escaped}'",
+            ';', 'focus-tab', '--previous',
         ]
     elif IS_MAC:
         escaped = prompt.replace("'", "'\\''")
@@ -895,25 +895,6 @@ def _restore_foreground_window(hwnd, initial_delay=0.8, poll_delay=0.3):
     t = threading.Thread(target=_restore, daemon=True)
     t.start()
 
-
-def _refocus_previous_tab():
-    """Tell Windows Terminal to focus the previous tab.
-
-    Called after launching a new tab via Popen. Uses a separate wt CLI call
-    instead of subcommand chaining (`;` in Popen args) which was unreliable
-    and could create phantom tabs.
-    """
-    if not IS_WIN:
-        return
-    try:
-        time.sleep(0.5)  # let WT finish creating the new tab
-        subprocess.Popen(
-            ['wt', '-w', '0', 'focus-tab', '--previous'],
-            startupinfo=_si(),
-        )
-        log("Sent focus-tab --previous to WT")
-    except Exception as e:
-        log(f"WARNING: focus-tab --previous failed: {e}")
 
 
 def _has_command(name):
@@ -1294,7 +1275,6 @@ def main():
         popen_kwargs = {"shell": True}
     log(f"Launch cmd: {cmd}")
     subprocess.Popen(cmd, **popen_kwargs)
-    _refocus_previous_tab()
     _restore_foreground_window(saved_hwnd)
     log(f"New tab opened in {launch_name}")
 
