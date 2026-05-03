@@ -191,8 +191,13 @@ Goal: share this system with others who aren't on Windows Terminal.
 ## WSL Verification (next session)
 
 After the context reset that produced this TODO, verify in the new tab:
-- [ ] V001: Tab uses Ubuntu profile — font + colors match the user's normal Ubuntu tab (not PowerShell default)
+- [x] V001: Tab uses Ubuntu profile — FAILED first run; root cause: two profiles named "Ubuntu" exist (CanonicalGroupLimited with default font, Microsoft.WSL with the user's `font.size: 19`). `wt -p "Ubuntu"` picked the wrong one. Fixed by reading WT settings.json and passing the GUID of the best-scoring match.
 - [ ] V002: No permission prompt for `python3` on session start (requires user to add `permissions.defaultMode: "bypassPermissions"` to `/home/ubu/.claude/settings.json`)
-- [ ] V003: Old tab actually closed (kill-tree fix worked) — KNOWN FAILURE this run, see T015
-- [ ] V004: SESSION_STATE.md was readable and useful (transcript handoff intact)
-- [ ] T015: Fix `_find_shell_pid_unix` for WSL — when `wt.exe` launches `wsl.exe -- bash -lc 'claude ...'`, bash exits after exec'ing claude, so the tab shell IS claude itself. Current detection walks: python3 → bash → claude → relay → sessionleader → systemd and gives up because none look like a "tab shell". Should recognize: parent chain ending at systemd/sessionleader where the highest-up process is `claude` means `claude` is the kill target. Then kill claude → relay → sessionleader as the descendant set.
+- [x] V003: Old tab actually closed — FAILED first run; root cause: `bash -lc 'cd dir && claude'` exec'd into claude, so `_find_shell_pid_unix` couldn't find a shell in the chain (only claude → relay → sessionleader). Fixed by adding a WSL fallback that detects claude-as-tab-leader when its parent is `relay`, and the kill walks the relay→sessionleader ancestor chain.
+- [x] V004: SESSION_STATE.md was readable and useful (transcript handoff intact)
+- [x] T015: Fix `_find_shell_pid_unix` + `_kill_old_tab_unix` for WSL bash-exec'd-into-claude case (done — see V003 above)
+
+## WSL Verification v2 (next session after fix)
+
+- [ ] V005: Font/colors match the user's preferred Ubuntu profile (not the old Canonical default)
+- [ ] V006: Old tab actually closes when reset runs from inside it (no orphan left over)

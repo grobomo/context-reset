@@ -846,21 +846,35 @@ def _find_shell_pid_unix():
                 log(f"  tab shell: PID {cpid} ({name}), parent {chain[i + 1]}")
                 break
 
+    # WSL fallback: when `bash -lc 'cd dir && claude'` runs, bash often exec's
+    # into claude, so there's no bash in the chain — claude is the immediate
+    # child of the WSL relay. Treat that claude as the tab leader.
+    if tab_shell is None and IS_WSL:
+        for i, (cpid, name) in enumerate(chain):
+            if name == 'claude' and i + 1 < len(chain):
+                _, parent_name = chain[i + 1]
+                if parent_name.startswith('relay'):
+                    tab_shell = cpid
+                    log(f"  tab shell (WSL exec'd): PID {cpid} ({name}), parent {chain[i + 1]}")
+                    break
+
     if tab_shell is None:
         log("  could not identify tab shell in process chain:")
         for cpid, name in chain:
             log(f"    PID {cpid}: {name}")
         return None
 
-    # Safety: verify this shell doesn't own multiple Claude processes
-    # Match both 'claude' (native) and 'claude.exe' (Windows interop in WSL)
-    claude_children = sum(
-        1 for (ppid, name) in _process_table.values()
-        if ppid == tab_shell and 'claude' in name
-    )
-    if claude_children > 1:
-        log(f"SAFETY: shell PID {tab_shell} owns {claude_children} Claude processes - NOT killing")
-        return None
+    # Safety: verify this shell doesn't own multiple Claude processes.
+    # Skip when tab_shell IS claude (WSL exec'd path) — claude doesn't spawn
+    # other claudes as children, so the check would always pass anyway.
+    if _process_table.get(tab_shell, (None, ''))[1] != 'claude':
+        claude_children = sum(
+            1 for (ppid, name) in _process_table.values()
+            if ppid == tab_shell and 'claude' in name
+        )
+        if claude_children > 1:
+            log(f"SAFETY: shell PID {tab_shell} owns {claude_children} Claude processes - NOT killing")
+            return None
 
     return tab_shell
 
@@ -880,6 +894,72 @@ def _get_wsl_claude_cmd():
     if _has_command('claude'):
         return 'claude'
     return 'claude.exe'
+
+
+def _get_wt_settings_path():
+    """Return path to Windows Terminal settings.json from WSL, or None."""
+    try:
+        out = subprocess.check_output(
+            ['cmd.exe', '/c', 'echo %LOCALAPPDATA%'],
+            stderr=subprocess.DEVNULL, timeout=5,
+        ).decode('utf-8', errors='ignore').strip().rstrip('\r')
+        if not out or out.startswith('%'):
+            return None
+        wsl_path = subprocess.check_output(
+            ['wslpath', out],
+            stderr=subprocess.DEVNULL, timeout=5,
+        ).decode('utf-8', errors='ignore').strip()
+        path = os.path.join(
+            wsl_path, 'Packages',
+            'Microsoft.WindowsTerminal_8wekyb3d8bbwe',
+            'LocalState', 'settings.json',
+        )
+        return path if os.path.exists(path) else None
+    except Exception:
+        return None
+
+
+def _get_wsl_profile_id(distro):
+    """Return the best WT profile identifier for `wt.exe -p`.
+
+    Multiple profiles can share the same name (e.g. one from
+    CanonicalGroupLimited with default font, another from Microsoft.WSL with
+    user-customized font). Picking by name alone hits the first match, which
+    is usually the wrong one. Read settings.json, score the candidates, and
+    return the GUID of the best match. Fall back to the distro name if
+    settings can't be read.
+    """
+    settings_path = _get_wt_settings_path()
+    if not settings_path:
+        return distro
+    try:
+        with open(settings_path, 'r', encoding='utf-8') as f:
+            settings = json.load(f)
+    except Exception:
+        return distro
+    matches = [
+        p for p in settings.get('profiles', {}).get('list', [])
+        if not p.get('hidden', False)
+        and p.get('name', '').lower() == distro.lower()
+    ]
+    if not matches:
+        return distro
+
+    # Prefer profiles with explicit font config (the user customized it),
+    # then prefer the modern Microsoft.WSL source over older WSL sources.
+    def score(p):
+        s = 0
+        if p.get('font'):
+            s += 100
+        src = p.get('source', '')
+        if src == 'Microsoft.WSL':
+            s += 10
+        elif src == 'Windows.Terminal.Wsl':
+            s += 5
+        return s
+
+    best = max(matches, key=score)
+    return best.get('guid') or distro
 
 
 def build_launch_cmd(project_dir, prompt, tab_title, tab_color):
@@ -903,10 +983,11 @@ def build_launch_cmd(project_dir, prompt, tab_title, tab_color):
         escaped = prompt.replace("'", "'\\''")
         distro = _get_wsl_distro()
         claude_cmd = _get_wsl_claude_cmd()
+        profile_id = _get_wsl_profile_id(distro)
         return (
             f'wt.exe new-tab --title "{safe_title}" '
             f'--tabColor "{tab_color}" '
-            f'-p "{distro}" '
+            f'-p "{profile_id}" '
             f"wsl.exe -d {distro} -- bash -lc "
             f"'cd \"{project_dir}\" && {claude_cmd} '\"'\"'{escaped}'\"'\"''"
         )
@@ -1053,21 +1134,33 @@ def _kill_old_tab_unix(shell_pid):
     # Collect everything to kill: shell + descendants
     pids = _collect_descendants(shell_pid, _process_table or {})
 
-    # On WSL, also include the relay parent — it's what holds the WT tab open.
-    # Skip if this would also be the parent of other tabs (safety: only include
-    # if its name contains 'relay' AND its only listed child is our shell_pid).
+    # On WSL, walk up the relay → sessionleader chain and kill each ancestor
+    # too — they're what hold the WT tab's pty open. Stop when we reach a
+    # process with multiple children (would affect other tabs) or PID <= 2.
     if IS_WSL and _process_table:
-        entry = _process_table.get(shell_pid)
-        if entry:
-            parent_pid, _ = entry
+        WSL_ANCESTORS = ('relay', 'sessionleader', 'init-systemd')
+        cur = shell_pid
+        for _ in range(5):  # bound the walk; structure is at most 3 deep
+            entry = _process_table.get(cur)
+            if not entry:
+                break
+            parent_pid = entry[0]
+            if parent_pid <= 2:
+                break
             parent_entry = _process_table.get(parent_pid)
-            if parent_entry and 'relay' in parent_entry[1]:
-                children_of_parent = [
-                    cpid for cpid, (ppid, _) in _process_table.items()
-                    if ppid == parent_pid
-                ]
-                if children_of_parent == [shell_pid]:
-                    pids.append(parent_pid)
+            if not parent_entry:
+                break
+            parent_name = parent_entry[1]
+            if not any(parent_name.startswith(a) for a in WSL_ANCESTORS):
+                break
+            children = [
+                cpid for cpid, (ppid, _) in _process_table.items()
+                if ppid == parent_pid
+            ]
+            if children != [cur]:
+                break
+            pids.append(parent_pid)
+            cur = parent_pid
 
     log(f"Killing process tree: {pids}")
 

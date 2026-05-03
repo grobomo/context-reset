@@ -477,6 +477,95 @@ if orig_env is not None:
 else:
     os.environ.pop('WSL_DISTRO_NAME', None)
 
+# --- _get_wsl_profile_id ---
+print("\n=== _get_wsl_profile_id ===")
+orig_settings_path = context_reset._get_wt_settings_path
+with tempfile.TemporaryDirectory() as d:
+    settings_path = os.path.join(d, "settings.json")
+    fake_settings = {
+        "profiles": {
+            "list": [
+                {
+                    "name": "Ubuntu",
+                    "source": "CanonicalGroupLimited.Ubuntu_old",
+                    "guid": "{old-canonical-guid}",
+                    "font": {},
+                    "hidden": False,
+                },
+                {
+                    "name": "Ubuntu",
+                    "source": "Microsoft.WSL",
+                    "guid": "{modern-msft-wsl-guid}",
+                    "font": {"size": 19},
+                    "hidden": False,
+                },
+                {
+                    "name": "Debian",
+                    "source": "Microsoft.WSL",
+                    "guid": "{debian-guid}",
+                    "font": {"size": 14},
+                    "hidden": False,
+                },
+                {
+                    "name": "Hidden",
+                    "source": "Microsoft.WSL",
+                    "guid": "{hidden-guid}",
+                    "font": {"size": 12},
+                    "hidden": True,
+                },
+            ]
+        }
+    }
+    with open(settings_path, 'w') as f:
+        json.dump(fake_settings, f)
+    context_reset._get_wt_settings_path = lambda: settings_path
+    test("picks profile with explicit font over one without",
+         context_reset._get_wsl_profile_id("Ubuntu") == "{modern-msft-wsl-guid}")
+    test("matches case-insensitively",
+         context_reset._get_wsl_profile_id("ubuntu") == "{modern-msft-wsl-guid}")
+    test("returns guid for distro with single match",
+         context_reset._get_wsl_profile_id("Debian") == "{debian-guid}")
+    test("falls back to distro name when no match",
+         context_reset._get_wsl_profile_id("Fedora") == "Fedora")
+    test("ignores hidden profiles",
+         context_reset._get_wsl_profile_id("Hidden") == "Hidden")
+    # Settings file unreachable -> falls back to distro name
+    context_reset._get_wt_settings_path = lambda: None
+    test("falls back to distro name when settings unreachable",
+         context_reset._get_wsl_profile_id("Ubuntu") == "Ubuntu")
+context_reset._get_wt_settings_path = orig_settings_path
+
+# --- _find_shell_pid_unix WSL fallback ---
+print("\n=== _find_shell_pid_unix (WSL exec'd-into-claude) ===")
+# Mock the process table to simulate the case where bash exec'd into claude:
+#   sessionleader(100) -> relay(101) -> claude(102) -> bash(103) -> python3(104)
+orig_table = context_reset._process_table
+orig_get = context_reset.get_process_parent_and_name
+orig_is_wsl_unix = context_reset.IS_WSL
+mock_table = {
+    1: (0, 'systemd'),
+    2: (1, 'init-systemd(ub'),
+    100: (2, 'sessionleader'),
+    101: (100, 'relay(102)'),
+    102: (101, 'claude'),
+    103: (102, 'bash'),
+    104: (103, 'python3'),
+}
+context_reset._process_table = mock_table
+context_reset.get_process_parent_and_name = lambda pid: mock_table.get(pid, (None, None))
+context_reset.IS_WSL = True
+orig_getpid = os.getpid
+os.getpid = lambda: 104
+try:
+    result = context_reset._find_shell_pid_unix()
+    test("returns claude PID when bash exec'd into claude (WSL fallback)",
+         result == 102)
+finally:
+    os.getpid = orig_getpid
+    context_reset._process_table = orig_table
+    context_reset.get_process_parent_and_name = orig_get
+    context_reset.IS_WSL = orig_is_wsl_unix
+
 # --- build_launch_cmd WSL branch ---
 print("\n=== build_launch_cmd (WSL) ===")
 # Temporarily pretend we're on WSL to test the WSL branch
@@ -487,6 +576,9 @@ context_reset.IS_WSL = True
 context_reset.IS_WIN = False
 context_reset.IS_MAC = False
 os.environ['WSL_DISTRO_NAME'] = 'Ubuntu'
+# Stub the profile lookup so the test doesn't depend on WT being installed
+orig_profile_id = context_reset._get_wsl_profile_id
+context_reset._get_wsl_profile_id = lambda distro: f"{{stub-guid-for-{distro}}}"
 with tempfile.TemporaryDirectory() as d:
     cmd = context_reset.build_launch_cmd(d, "test prompt", "my title", "#2D5F2D")
     test("WSL: contains wt.exe", "wt.exe" in cmd)
@@ -494,8 +586,8 @@ with tempfile.TemporaryDirectory() as d:
     test("WSL: contains distro name", "Ubuntu" in cmd)
     test("WSL: contains tab title", "my title" in cmd)
     test("WSL: contains tab color", "#2D5F2D" in cmd)
-    test("WSL: applies -p profile (so WT uses Ubuntu fonts/colors, not default PowerShell)",
-         '-p "Ubuntu"' in cmd)
+    test("WSL: applies -p profile id from _get_wsl_profile_id",
+         '-p "{stub-guid-for-Ubuntu}"' in cmd)
     test("WSL: contains claude command", "claude" in cmd)
     test("WSL: contains prompt", "test prompt" in cmd)
     test("WSL: uses bash -lc (login shell)", "bash -lc" in cmd)
@@ -505,6 +597,7 @@ with tempfile.TemporaryDirectory() as d:
     # Test title sanitization
     cmd3 = context_reset.build_launch_cmd(d, "p", 'title "with" quotes', "#000000")
     test("WSL: strips quotes from title", '"with"' not in cmd3 and "title with quotes" in cmd3)
+context_reset._get_wsl_profile_id = orig_profile_id
 # Restore original platform flags
 context_reset.IS_WSL = orig_is_wsl
 context_reset.IS_WIN = orig_is_win
