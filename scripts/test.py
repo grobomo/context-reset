@@ -494,6 +494,8 @@ with tempfile.TemporaryDirectory() as d:
     test("WSL: contains distro name", "Ubuntu" in cmd)
     test("WSL: contains tab title", "my title" in cmd)
     test("WSL: contains tab color", "#2D5F2D" in cmd)
+    test("WSL: applies -p profile (so WT uses Ubuntu fonts/colors, not default PowerShell)",
+         '-p "Ubuntu"' in cmd)
     test("WSL: contains claude command", "claude" in cmd)
     test("WSL: contains prompt", "test prompt" in cmd)
     test("WSL: uses bash -lc (login shell)", "bash -lc" in cmd)

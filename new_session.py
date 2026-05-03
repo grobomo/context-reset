@@ -897,13 +897,16 @@ def build_launch_cmd(project_dir, prompt, tab_title, tab_color):
         )
     elif IS_WSL:
         # WSL can call wt.exe via Windows interop to open a new WT tab
-        # The new tab runs WSL with the same distro, cd's, and launches claude
+        # The new tab runs WSL with the same distro, cd's, and launches claude.
+        # -p applies the matching WT profile (font/colors) — without it WT
+        # uses the default profile (typically PowerShell).
         escaped = prompt.replace("'", "'\\''")
         distro = _get_wsl_distro()
         claude_cmd = _get_wsl_claude_cmd()
         return (
             f'wt.exe new-tab --title "{safe_title}" '
             f'--tabColor "{tab_color}" '
+            f'-p "{distro}" '
             f"wsl.exe -d {distro} -- bash -lc "
             f"'cd \"{project_dir}\" && {claude_cmd} '\"'\"'{escaped}'\"'\"''"
         )
@@ -1020,18 +1023,73 @@ def _kill_old_tab_windows(shell_pid, close_tab):
     sys.exit(0)
 
 
+def _collect_descendants(root_pid, table):
+    """Return [root_pid, *all descendants] discovered via BFS over the process table."""
+    result = [root_pid]
+    queue = [root_pid]
+    while queue:
+        parent = queue.pop()
+        for cpid, (ppid, _) in table.items():
+            if ppid == parent and cpid not in result:
+                result.append(cpid)
+                queue.append(cpid)
+    return result
+
+
 def _kill_old_tab_unix(shell_pid):
+    """Kill the old tab's process tree.
+
+    On WSL, the bash shell, claude, and relay are in different process groups,
+    so a simple killpg only kills bash and leaves claude holding the pty open.
+    We walk the descendant tree (and on WSL include the relay parent) and kill
+    everything in a detached subprocess so we don't die before the work is done.
+    """
     log("=== Context reset complete ===")
-    try:
-        os.killpg(os.getpgid(shell_pid), signal.SIGTERM)
-    except ProcessLookupError:
-        pass
-    except PermissionError:
-        # Fall back to killing just the shell
-        try:
-            os.kill(shell_pid, signal.SIGTERM)
-        except Exception:
-            pass
+
+    global _process_table
+    if _process_table is None:
+        _process_table = _load_process_table()
+
+    # Collect everything to kill: shell + descendants
+    pids = _collect_descendants(shell_pid, _process_table or {})
+
+    # On WSL, also include the relay parent — it's what holds the WT tab open.
+    # Skip if this would also be the parent of other tabs (safety: only include
+    # if its name contains 'relay' AND its only listed child is our shell_pid).
+    if IS_WSL and _process_table:
+        entry = _process_table.get(shell_pid)
+        if entry:
+            parent_pid, _ = entry
+            parent_entry = _process_table.get(parent_pid)
+            if parent_entry and 'relay' in parent_entry[1]:
+                children_of_parent = [
+                    cpid for cpid, (ppid, _) in _process_table.items()
+                    if ppid == parent_pid
+                ]
+                if children_of_parent == [shell_pid]:
+                    pids.append(parent_pid)
+
+    log(f"Killing process tree: {pids}")
+
+    # Run kill in a detached subprocess so SIGTERM/SIGKILL of our own ancestors
+    # doesn't take us down before we finish issuing signals.
+    kill_script = (
+        "import os, signal, time\n"
+        f"pids = {pids!r}\n"
+        "def safe_kill(pid, sig):\n"
+        "    try:\n"
+        "        if pid > 1: os.kill(pid, sig)\n"
+        "    except (ProcessLookupError, PermissionError):\n"
+        "        pass\n"
+        "for p in pids: safe_kill(p, signal.SIGTERM)\n"
+        "time.sleep(2)\n"
+        "for p in pids: safe_kill(p, signal.SIGKILL)\n"
+    )
+    subprocess.Popen(
+        [sys.executable, '-c', kill_script],
+        start_new_session=True,
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
     sys.exit(0)
 
 
@@ -1040,7 +1098,9 @@ def _kill_old_tab_unix(shell_pid):
 def get_project_logs_dir(project_dir):
     home = os.path.expanduser("~")
     slug = re.sub(r'[^a-zA-Z0-9-]', '-', os.path.abspath(project_dir))
-    if slug.startswith("-"):
+    # Claude Code preserves the leading '-' that comes from a Unix path's
+    # leading '/'. Only strip on Windows, where paths start with a drive letter.
+    if IS_WIN and slug.startswith("-"):
         slug = slug[1:]
     return os.path.join(home, ".claude", "projects", slug)
 

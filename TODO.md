@@ -185,3 +185,13 @@ Goal: share this system with others who aren't on Windows Terminal.
 - [x] T010: WSL2 dry-run verified — detection, wt.exe cmd, claude.exe fallback, shell PID found via relay process
 - [x] T011: README updated — WSL2 row in platform table, WSL details section, requirements, test count
 - [x] T012: pip install verified — pyproject.toml already platform-agnostic, no changes needed
+- [x] T013: WSL E2E live test — kill-old-tab fix verified (descendant tree + relay parent killed via detached subprocess)
+- [x] T014: WSL profile flag — added `-p "$WSL_DISTRO_NAME"` so new tab uses Ubuntu profile, not WT default PowerShell
+
+## WSL Verification (next session)
+
+After the context reset that produced this TODO, verify in the new tab:
+- [ ] V001: Tab uses Ubuntu profile — font + colors match the user's normal Ubuntu tab (not PowerShell default)
+- [ ] V002: No permission prompt for `python3` on session start (requires user to add `permissions.defaultMode: "bypassPermissions"` to `/home/ubu/.claude/settings.json`)
+- [ ] V003: Old tab actually closed (kill-tree fix worked) — confirmed if this session is the only context-reset tab open
+- [ ] V004: SESSION_STATE.md was readable and useful (transcript handoff intact)
