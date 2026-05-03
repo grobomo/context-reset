@@ -980,6 +980,26 @@ def _kill_old_tab_unix(shell_pid):
 
 # ============ Transcript Verification ============
 
+def _resolve_worktree_root(project_dir):
+    """If project_dir is inside .claude/worktrees/, resolve to the project root.
+
+    Claude Code worktrees live at <project>/.claude/worktrees/<name>/. When
+    CLAUDE_PROJECT_DIR points there, the new session should open in <project>/
+    so hook-runner path checks work and the session starts at the real root.
+
+    Returns the resolved path, or project_dir unchanged if not in a worktree.
+    """
+    normalized = project_dir.replace("\\", "/")
+    marker = "/.claude/worktrees/"
+    idx = normalized.find(marker)
+    if idx != -1:
+        root = project_dir[:idx]
+        worktree_name = normalized[idx + len(marker):].rstrip("/").split("/")[0]
+        log(f"Detected worktree path, resolving to project root: {root} (worktree: {worktree_name})")
+        return root
+    return project_dir
+
+
 def get_project_logs_dir(project_dir):
     home = os.path.expanduser("~")
     slug = re.sub(r'[^a-zA-Z0-9-]', '-', os.path.abspath(project_dir))
@@ -1157,6 +1177,7 @@ def main():
     cleanup_old_logs()
 
     project_dir = os.path.abspath(os.path.expanduser(args.project_dir))
+    project_dir = _resolve_worktree_root(project_dir)
     # Sanity check: reject paths inside Git install dir (Git Bash CWD leak)
     if 'Program Files' in project_dir and 'Git' in project_dir:
         home = os.path.expanduser('~')
@@ -1167,7 +1188,7 @@ def main():
     # Cross-project reset: save state in current project, launch in target
     launch_dir = project_dir
     if args.target_project:
-        launch_dir = os.path.abspath(os.path.expanduser(args.target_project))
+        launch_dir = _resolve_worktree_root(os.path.abspath(os.path.expanduser(args.target_project)))
         if not os.path.isdir(launch_dir):
             log(f"ERROR: target project dir does not exist: {launch_dir}")
             return

@@ -291,6 +291,37 @@ with tempfile.TemporaryDirectory() as d:
         other_key = os.path.abspath(other_proj).replace("\\", "/")
         test("untrusted path gets written", other_key in config3.get("projects", {}))
 
+# --- _resolve_worktree_root ---
+print("\n=== _resolve_worktree_root ===")
+# Normal project dir — unchanged
+test("normal path unchanged",
+     context_reset._resolve_worktree_root("/projects/myapp") == "/projects/myapp")
+
+# Worktree subdir — resolves to project root
+test("worktree path resolves to root",
+     context_reset._resolve_worktree_root("/projects/myapp/.claude/worktrees/feat-branch")
+     == "/projects/myapp")
+
+# Worktree with trailing slash
+test("worktree trailing slash",
+     context_reset._resolve_worktree_root("/projects/myapp/.claude/worktrees/feat-branch/")
+     == "/projects/myapp")
+
+# Windows-style path
+test("windows worktree path",
+     context_reset._resolve_worktree_root("C:\\Dev\\proj\\.claude\\worktrees\\fix-bug")
+     == "C:\\Dev\\proj")
+
+# .claude dir without worktrees — unchanged
+test(".claude without worktrees unchanged",
+     context_reset._resolve_worktree_root("/projects/myapp/.claude/settings")
+     == "/projects/myapp/.claude/settings")
+
+# Deeply nested worktree subpath — still resolves
+test("nested worktree subpath",
+     context_reset._resolve_worktree_root("/proj/.claude/worktrees/wt/src/main.py")
+     == "/proj")
+
 # --- get_newest_jsonl ---
 print("\n=== get_newest_jsonl ===")
 with tempfile.TemporaryDirectory() as d:
