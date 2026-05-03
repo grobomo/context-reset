@@ -1029,22 +1029,33 @@ def _kill_old_tab_unix(shell_pid):
 # ============ Worktree Resolution ============
 
 def _resolve_worktree_root(project_dir):
-    """If project_dir is inside .claude/worktrees/, resolve to the project root.
+    """If project_dir IS a worktree root, resolve to the parent project root.
 
     Claude Code worktrees live at <project>/.claude/worktrees/<name>/. When
-    CLAUDE_PROJECT_DIR points there, the new session should open in <project>/
-    so hook-runner path checks work and the session starts at the real root.
+    CLAUDE_PROJECT_DIR points directly at the worktree root, the new session
+    should open in <project>/ so hook-runner path checks work.
 
-    Returns the resolved path, or project_dir unchanged if not in a worktree.
+    BUT if CLAUDE_PROJECT_DIR points to a subdirectory INSIDE the worktree
+    (e.g. .claude/worktrees/live-test/labs/dd-lab), that subdirectory is the
+    actual project — do NOT resolve upward.
+
+    Returns the resolved path, or project_dir unchanged.
     """
     normalized = project_dir.replace("\\", "/")
     marker = "/.claude/worktrees/"
     idx = normalized.find(marker)
     if idx != -1:
-        root = project_dir[:idx]
-        worktree_name = normalized[idx + len(marker):].rstrip("/").split("/")[0]
-        log(f"Detected worktree path, resolving to project root: {root} (worktree: {worktree_name})")
-        return root
+        after_marker = normalized[idx + len(marker):].rstrip("/")
+        parts = after_marker.split("/")
+        # parts[0] is the worktree name. If there are more parts, the project
+        # is a subdirectory inside the worktree — don't resolve.
+        if len(parts) <= 1:
+            root = project_dir[:idx]
+            worktree_name = parts[0] if parts else ""
+            log(f"Detected worktree path, resolving to project root: {root} (worktree: {worktree_name})")
+            return root
+        else:
+            log(f"Path is inside worktree subdirectory, keeping as-is: {project_dir}")
     return project_dir
 
 

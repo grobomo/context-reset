@@ -413,9 +413,9 @@ test("windows worktree path",
 test(".claude without worktrees unchanged",
      context_reset._resolve_worktree_root("/projects/myapp/.claude/settings")
      == "/projects/myapp/.claude/settings")
-test("nested worktree subpath",
+test("nested worktree subpath NOT resolved",
      context_reset._resolve_worktree_root("/proj/.claude/worktrees/wt/src/main.py")
-     == "/proj")
+     == "/proj/.claude/worktrees/wt/src/main.py")
 
 # --- dry-run: split behavior ---
 print("\n=== dry-run mode (split behavior) ===")
