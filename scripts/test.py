@@ -727,6 +727,98 @@ finally:
     context_reset.log = orig_log
     sys.argv = orig_argv
 
+# --- Split entry points: context_reset_main vs main (spec 011) ---
+print("\n=== Split entry points (spec 011) ===")
+# context_reset.py is no longer a backward-compat alias — it must import
+# context_reset_main from new_session and expose it as `main`.
+import context_reset as cr_module
+test("context_reset.py exposes main = context_reset_main",
+     cr_module.main is context_reset.context_reset_main)
+test("context_reset_main and main are distinct functions",
+     context_reset.context_reset_main is not context_reset.main)
+
+# Both entry points share the same dispatcher with hard-coded close behavior.
+# Verify they call _dispatch with the right close_old_tab flag by capturing args.
+captured = {}
+def _fake_dispatch(args, *, close_old_tab, allow_target_project):
+    captured['close_old_tab'] = close_old_tab
+    captured['allow_target_project'] = allow_target_project
+    captured['args'] = args
+orig_dispatch = context_reset._dispatch
+orig_argv = sys.argv
+
+# main() (new_session) -> close_old_tab=False, allow_target_project=True
+context_reset._dispatch = _fake_dispatch
+sys.argv = ['new_session.py', '--project-dir', '/tmp/foo']
+context_reset.main()
+test("new_session.main() forces close_old_tab=False",
+     captured.get('close_old_tab') is False)
+test("new_session.main() allows --target-project",
+     captured.get('allow_target_project') is True)
+
+# context_reset_main() -> close_old_tab=True, allow_target_project=False
+captured.clear()
+sys.argv = ['context_reset.py', '--project-dir', '/tmp/foo']
+context_reset.context_reset_main()
+test("context_reset_main() forces close_old_tab=True",
+     captured.get('close_old_tab') is True)
+test("context_reset_main() forbids --target-project",
+     captured.get('allow_target_project') is False)
+
+# context_reset_main() must reject --target-project at parse time
+sys.argv = ['context_reset.py', '--target-project', '/tmp/bar']
+try:
+    context_reset.context_reset_main()
+    parsed_target = True  # should not reach here
+except SystemExit:
+    parsed_target = False
+test("context_reset.py rejects --target-project (parser error)",
+     parsed_target is False)
+
+# Removed flags: --no-close, --preserve must NOT be accepted by either parser
+for flag in ('--no-close', '--preserve'):
+    sys.argv = ['new_session.py', flag]
+    try:
+        context_reset.main()
+        accepted_new = True
+    except SystemExit:
+        accepted_new = False
+    test(f"new_session main rejects removed flag {flag}", accepted_new is False)
+
+    sys.argv = ['context_reset.py', flag]
+    try:
+        context_reset.context_reset_main()
+        accepted_cr = True
+    except SystemExit:
+        accepted_cr = False
+    test(f"context_reset_main rejects removed flag {flag}", accepted_cr is False)
+
+# Both expose --stop with shared semantics
+sys.argv = ['new_session.py', '--stop']
+captured.clear()
+context_reset.main()
+test("new_session main forwards --stop", captured.get('args').stop is True)
+
+sys.argv = ['context_reset.py', '--stop']
+captured.clear()
+context_reset.context_reset_main()
+test("context_reset_main forwards --stop", captured.get('args').stop is True)
+
+context_reset._dispatch = orig_dispatch
+sys.argv = orig_argv
+
+# --- _resolve_project_dir helper ---
+print("\n=== _resolve_project_dir ===")
+# Normal path -> abspath
+with tempfile.TemporaryDirectory() as d:
+    test("expands and abspaths normal dir",
+         context_reset._resolve_project_dir(d) == os.path.abspath(d))
+# Git install dir leak -> falls back to ~/<basename>
+fake_git = os.path.join("C:" + os.sep, "Program Files", "Git", "myproject")
+resolved = context_reset._resolve_project_dir(fake_git)
+test("rejects Git install dir, falls back to home",
+     "Program Files" not in resolved and resolved.endswith("myproject"))
+
 # --- Summary ---
 print(f"\n{'='*40}")
 print(f"Results: {PASS} passed, {FAIL} failed")

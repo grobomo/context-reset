@@ -12,7 +12,7 @@ requires-python = ">=3.8"
 
 [project.scripts]
 new-session = "new_session:main"
-context-reset = "new_session:main"
+context-reset = "new_session:context_reset_main"
 
 [tool.setuptools]
 py-modules = ["new_session", "context_reset", "task_claims"]

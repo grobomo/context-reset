@@ -161,11 +161,14 @@ Two scripts, two behaviors, no ambiguity:
 - `context_reset.py` — same-project reset. ALWAYS closes calling tab.
 - `new_session.py` — cross-project session. NEVER closes calling tab.
 
-- [ ] T001: context_reset.py — remove preserve-tab flag file check, always set close_old_tab=True
-- [ ] T002: new_session.py — always set close_old_tab=False, ignore preserve-tab flag
-- [ ] T003: Remove backward-compat alias (context_reset.py should NOT call new_session.py anymore)
-- [ ] T004: Update tests for new behaviors
-- [ ] T005: Update CLAUDE.md and README with the two-script model
+- [x] T001: context_reset.py — `context_reset_main()` hard-codes close_old_tab=True; removed preserve-tab flag file check entirely
+- [x] T002: new_session.py — `main()` hard-codes close_old_tab=False; removed --no-close and --preserve flags
+- [x] T003: Replaced backward-compat alias — context_reset.py is now a thin wrapper importing context_reset_main
+- [x] T004: Added 15 split-entry-point tests (151 total)
+- [x] T005: Updated CLAUDE.md (two-script table at top) and README (Files section)
+- [ ] T006: Hook-runner update — `cwd-drift-detector.js`, `no-nested-claude.js`, `spec-gate.js` reference `context_reset.py --target-project` which the new parser rejects. Need: switch those references to `new_session.py --target-project` (cross-project semantics). Belongs in hook-runner repo.
+
+**Note:** Worktree-isolated implementation. Done in `_grobomo/context-reset-011-worktree/` on branch `011-split-v2`. Not merged to live `_grobomo/context-reset/` yet — once landed, dd-lab and other live consumers will see the new behavior.
 
 ## Cross-Platform Support (016)
 

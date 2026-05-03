@@ -1,11 +1,22 @@
 # context-reset (new-session)
 
-Launch a new Claude Code session in any project. Context reset (same project) or project switch (different project). Launches a fresh Claude session in a new terminal tab, verifies it's working, then kills the old tab.
+Two scripts, two behaviors, no ambiguity.
+
+| Script | When to use | Calling tab |
+|---|---|---|
+| `context_reset.py` | Same-project reset — long context, save state and start fresh | **ALWAYS closed** after the new tab verifies |
+| `new_session.py`   | Cross-project handoff — open another project, or a parallel same-project session | **NEVER closed** — keeps running for review |
+
+Both scripts launch a new terminal tab and run `claude` in the target project. They share all helper logic (state handoff, profile detection, process tree walking, etc.). The only differences are which entry-point function gets called and the hard-coded close-tab decision baked into it.
 
 ## Architecture
 
-Main file: `new_session.py`. No dependencies beyond Python stdlib.
-`context_reset.py` is a backward-compat alias that re-exports everything from `new_session.py`.
+Main file: `new_session.py`. No dependencies beyond Python stdlib. Exposes two entry points:
+
+- `main()` — `new_session.py` entry. Hard-codes `close_old_tab=False` and accepts `--target-project`.
+- `context_reset_main()` — `context_reset.py` entry. Hard-codes `close_old_tab=True`, no `--target-project`.
+
+`context_reset.py` is a thin wrapper that imports `context_reset_main` from `new_session` and aliases it to `main`. Both entry points share `_dispatch()` which handles the project lock, `--stop` self-close, and `_run_launch()` flow.
 
 - **Pre-trust**: Checks `~/.claude.json` for workspace trust. Claude Code walks parent directories, so a trusted parent (e.g. `~/Documents/ProjectsCL1`) covers all children. Only writes a new entry if no ancestor is trusted.
 - **Phase 1**: Launch new terminal tab with `claude '<prompt>'`
@@ -35,9 +46,16 @@ The system creates a fully autonomous coding agent:
 ### Calling from external systems
 
 When launching from OpenClaw or any external automation:
+
 ```bash
-python3 new_session.py --project-dir /path/to/project --prompt "task" --no-close
+# Reset same project (closes calling tab)
+python3 context_reset.py --project-dir /path/to/project --prompt "task"
+
+# Open a session in another project (keeps calling tab running)
+python3 new_session.py --project-dir /current/project --target-project /other/project --prompt "task"
 ```
+
+The previous `--no-close` / `--preserve` flags are gone — pick the script whose default behavior matches what you want, no flag overrides.
 
 **Do NOT add permission flags** (`--dangerously-skip-permissions`, `--permission-mode`, `--print`). The script handles workspace trust automatically. `--print` mode breaks the auto-continue loop.
 
@@ -54,6 +72,6 @@ python3 new_session.py --project-dir /path/to/project --prompt "task" --no-close
 ## Testing
 
 ```bash
-python scripts/test.py    # 125 tests
+python scripts/test.py    # 151 tests
 python new_session.py --project-dir . --dry-run   # verify command without executing
 ```

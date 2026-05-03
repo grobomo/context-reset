@@ -199,10 +199,10 @@ python scripts/test.py
 ## Files
 
 ```
-new_session.py            # Main script — session launcher and state handoff
-context_reset.py          # Backward-compat alias (imports new_session.py)
+new_session.py            # Cross-project session launcher (NEVER closes calling tab)
+context_reset.py          # Same-project reset (ALWAYS closes calling tab); thin wrapper
 task_claims.py            # Multi-tab task negotiation with OS-level file locks
-scripts/test.py           # Tests for new_session (125 tests)
+scripts/test.py           # Tests for new_session + context_reset entry points (151 tests)
 scripts/test_task_claims.py  # Tests for task_claims (35 tests)
 ~/.claude/context-reset/  # Runtime data (logs, color map)
 SESSION_STATE.md          # Auto-generated in target project (gitignored)
