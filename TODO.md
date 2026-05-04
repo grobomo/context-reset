@@ -253,13 +253,19 @@ Goal: share this system with others who aren't on Windows Terminal.
   - Fixed: `license = "MIT"` incompatible with Python 3.8 setuptools
   - All 7 jobs green: ubuntu/windows/macos x 3.8/3.12 + secret scan
 
-## Session 2026-05-04c handoff
+## Session 2026-05-04d handoff
 
-PRs #56-#57 merged. CI is live — every PR now runs tests on 3 OS x 2 Python.
-T008 done — 140/140 on macOS EC2. Milestone 016 (cross-platform) is 100% complete.
-All platforms verified live: Windows 11, Windows Server 2022, Ubuntu 22.04, WSL2, macOS Darwin arm64.
-T603 added to hook-runner: user correction detector meta-hook.
-PR #58 merged. CI green across all 7 jobs.
+PRs #56-#59 merged this session (4 PRs):
+- #56: README fixes (removed --no-close, updated test counts)
+- #57: GitHub Actions CI (6-job matrix: 3 OS x 2 Python, all green)
+- #58: macOS EC2 test 140/140 on Darwin arm64 (SSH via SSM, CLAUDE.md cost docs)
+- #59: README add macOS to verified platforms
+
+Milestone 016 (cross-platform) is 100% COMPLETE. Zero unchecked items.
+All 5 platforms verified live: Windows 11 (149), Windows Server 2022 (115), Ubuntu 22.04 (105), WSL2 (140), macOS (140).
+CI pipeline running on every PR. Lesson recorded: never defer tests for cost.
+T603 added to hook-runner: user correction detector meta-hook. Session launched.
+Project is mature and feature-complete.
 
 ## Session 2026-05-04a handoff
 
