@@ -26,6 +26,7 @@ import csv
 import io
 import json
 import re
+import shutil
 import signal
 import subprocess
 import os
@@ -889,11 +890,7 @@ def _restore_tab_focus():
 
 def _has_command(name):
     """Check if a command exists on PATH."""
-    try:
-        subprocess.check_output(['which', name], stderr=subprocess.DEVNULL)
-        return True
-    except Exception:
-        return False
+    return shutil.which(name) is not None
 
 
 # ============ Platform: Kill Old Tab ============
