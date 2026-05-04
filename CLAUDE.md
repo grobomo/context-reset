@@ -31,13 +31,12 @@ python context_reset.py --project-dir $CLAUDE_PROJECT_DIR
 The auto-continue loop creates a fully autonomous coding agent:
 1. `auto-continue.js` (stop hook) blocks Claude from stopping → feeds `stop-message.txt`
 2. `stop-message.txt` says: check TODO.md, do next task, test it, then optimize
-3. Between tasks, Claude calls `openclaw-checkin.py` to report status to OpenClaw
-4. When context fills up, Claude runs `context_reset.py` which kills this tab and opens a fresh one
-5. Fresh session reads SESSION_STATE.md + TODO.md, continues where it left off
+3. When context fills up, Claude runs `context_reset.py` which kills this tab and opens a fresh one
+4. Fresh session reads SESSION_STATE.md + TODO.md, continues where it left off
 
 ### Cross-project sessions (`new_session.py`)
 
-Called from OpenClaw or external automation to open a session in another project:
+Called from external automation to open a session in another project:
 ```bash
 python new_session.py --project-dir /current/project --target-project /other/project --prompt "task"
 ```
