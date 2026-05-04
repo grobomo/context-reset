@@ -14,8 +14,8 @@ Usage:
     python new_session.py --stop                             # kill current tab only
     python context_reset.py                                  # same as --close-old-tab
 
-Supported platforms: Windows (Windows Terminal), macOS (Terminal.app/iTerm2),
-Linux (gnome-terminal, or plain background process).
+Supported platforms: Windows (Windows Terminal), WSL (routes through wt.exe),
+macOS (Terminal.app/iTerm2), Linux (gnome-terminal, or plain background process).
 
 Audit log: ~/.claude/context-reset/YYYY-MM-DD.log (rotated daily)
 """
@@ -37,6 +37,20 @@ from datetime import datetime
 
 IS_WIN = sys.platform == "win32"
 IS_MAC = sys.platform == "darwin"
+
+
+def _detect_wsl():
+    """Detect if running inside Windows Subsystem for Linux."""
+    if IS_WIN or IS_MAC:
+        return False
+    try:
+        with open('/proc/version', 'r') as f:
+            return 'microsoft' in f.read().lower()
+    except (FileNotFoundError, PermissionError):
+        return False
+
+
+IS_WSL = _detect_wsl()
 
 
 # ============ Logging ============
@@ -843,6 +857,39 @@ def build_launch_cmd(project_dir, prompt, tab_title, tab_color):
             'powershell', '-NoExit', '-EncodedCommand', encoded,
             ';', 'focus-tab', '--previous',
         ]
+    elif IS_WSL:
+        # WSL can call wt.exe to open Windows Terminal tabs, giving us the
+        # same tab UX (titles, colors, focus-tab) as native Windows.
+        prompt_file = os.path.join(project_dir, '.claude-next-prompt')
+        with open(prompt_file, 'w', encoding='utf-8') as f:
+            f.write(prompt)
+        safe_title = tab_title.replace('"', '').replace("'", "")
+        # Convert WSL path to Windows path for WT's --startingDirectory
+        try:
+            win_dir = subprocess.check_output(
+                ['wslpath', '-w', project_dir], text=True
+            ).strip()
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            win_dir = project_dir
+        # Build bash command that reads prompt from file, cleans up, runs claude.
+        # This runs inside a new WSL tab opened by wt.exe.
+        escaped_file = prompt_file.replace("'", "'\\''")
+        escaped_dir = project_dir.replace("'", "'\\''")
+        bash_cmd = (
+            f"p=$(cat '{escaped_file}'); "
+            f"rm -f '{escaped_file}'; "
+            f"cd '{escaped_dir}' && claude \"$p\""
+        )
+        # wt.exe opens a new tab, runs wsl bash with our command.
+        # focus-tab --previous restores focus atomically.
+        return [
+            'wt.exe', '-w', '0', 'new-tab',
+            '--title', safe_title,
+            '--tabColor', tab_color,
+            '--startingDirectory', win_dir,
+            '--', 'wsl.exe', 'bash', '-c', bash_cmd,
+            ';', 'focus-tab', '--previous',
+        ]
     elif IS_MAC:
         escaped = prompt.replace("'", "'\\''")
         return (
@@ -1262,7 +1309,8 @@ def main():
     log(f"Project dir (state): {project_dir}")
     if launch_dir != project_dir:
         log(f"Target dir (launch): {launch_dir}")
-    log(f"Platform: {sys.platform}")
+    platform_label = "WSL" if IS_WSL else sys.platform
+    log(f"Platform: {platform_label}")
     log(f"Prompt: {prompt[:80]}...")
     log(f"Close old tab: {close_old}")
 
@@ -1288,8 +1336,8 @@ def main():
     before = count_claude_processes()
     log(f"Phase 1: launching new tab ({before} Claude processes before)")
 
-    if IS_WIN:
-        popen_kwargs = {}
+    if IS_WIN or IS_WSL:
+        popen_kwargs = {}  # cmd is a list, no shell needed
     else:
         popen_kwargs = {"shell": True}
     log(f"Launch cmd: {cmd}")

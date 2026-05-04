@@ -404,6 +404,43 @@ with tempfile.TemporaryDirectory() as d:
         test("contains claude command", "claude" in cmd)
         test("contains prompt", "test prompt" in cmd)
 
+# --- WSL detection and build_launch_cmd ---
+print("\n=== WSL support ===")
+# Test _detect_wsl (should be False on both Windows and non-WSL Linux)
+test("_detect_wsl returns bool", isinstance(context_reset._detect_wsl(), bool))
+
+# Test build_launch_cmd WSL branch by temporarily setting IS_WSL
+with tempfile.TemporaryDirectory() as d:
+    old_wsl = context_reset.IS_WSL
+    old_win = context_reset.IS_WIN
+    old_mac = context_reset.IS_MAC
+    try:
+        context_reset.IS_WSL = True
+        context_reset.IS_WIN = False
+        context_reset.IS_MAC = False
+        cmd_wsl = context_reset.build_launch_cmd(d, "test prompt", "wsl-title", "#2D5F2D")
+        test("WSL returns list", isinstance(cmd_wsl, list))
+        test("WSL uses wt.exe", "wt.exe" in cmd_wsl)
+        test("WSL uses wsl.exe", "wsl.exe" in cmd_wsl)
+        test("WSL has tab title", "wsl-title" in cmd_wsl)
+        test("WSL has tab color", "#2D5F2D" in cmd_wsl)
+        test("WSL has focus-tab", "focus-tab" in cmd_wsl and "--previous" in cmd_wsl)
+        # Prompt is written to file (not inline)
+        prompt_file = os.path.join(d, '.claude-next-prompt')
+        test("WSL writes prompt file", os.path.exists(prompt_file))
+        test("WSL prompt file content", open(prompt_file, encoding='utf-8').read() == "test prompt")
+        # bash -c command reads from prompt file
+        bash_args = [c for c in cmd_wsl if 'claude' in str(c)]
+        test("WSL bash cmd has claude", len(bash_args) > 0)
+        # Semicolons in prompt don't reach WT args
+        cmd_semi = context_reset.build_launch_cmd(d, "return null; next", "t", "#000000")
+        semi_indices = [i for i, c in enumerate(cmd_semi) if c == ";"]
+        test("WSL prompt semicolons safe", len(semi_indices) == 1)
+    finally:
+        context_reset.IS_WSL = old_wsl
+        context_reset.IS_WIN = old_win
+        context_reset.IS_MAC = old_mac
+
 # --- _resolve_worktree_root ---
 print("\n=== _resolve_worktree_root ===")
 test("normal path unchanged",
