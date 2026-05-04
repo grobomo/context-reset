@@ -1425,17 +1425,20 @@ def main():
     # If a Claude session is already actively writing to the target project's
     # transcript, we'd be spawning a duplicate. This catches cases where the
     # previous tab's kill failed silently.
-    logs_dir = get_project_logs_dir(launch_dir)
-    newest_jsonl, _ = get_newest_jsonl(logs_dir)
-    if newest_jsonl and os.path.exists(newest_jsonl):
-        last_write = os.path.getmtime(newest_jsonl)
-        age_s = time.time() - last_write
-        if age_s < 10:
-            log(f"DUPLICATE GUARD: transcript {os.path.basename(newest_jsonl)} "
-                f"was written {age_s:.1f}s ago — another session is active")
-            log(f"SKIPPED: refusing to spawn duplicate session for {launch_name}")
-            release_lock(lock_fh, lock_file)
-            return
+    # Skip in close-old-tab mode: the active transcript is OUR session (the
+    # one being replaced), so a fresh write is expected, not a duplicate.
+    if not close_old:
+        logs_dir = get_project_logs_dir(launch_dir)
+        newest_jsonl, _ = get_newest_jsonl(logs_dir)
+        if newest_jsonl and os.path.exists(newest_jsonl):
+            last_write = os.path.getmtime(newest_jsonl)
+            age_s = time.time() - last_write
+            if age_s < 10:
+                log(f"DUPLICATE GUARD: transcript {os.path.basename(newest_jsonl)} "
+                    f"was written {age_s:.1f}s ago — another session is active")
+                log(f"SKIPPED: refusing to spawn duplicate session for {launch_name}")
+                release_lock(lock_fh, lock_file)
+                return
 
     # Pre-trust the workspace
     ensure_workspace_trusted(launch_dir)
