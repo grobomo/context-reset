@@ -173,19 +173,25 @@ Full Mac, WSL, and Linux support for the entire Claude Code management system �
 
 Goal: share this system with others who aren't on Windows Terminal.
 
-- [ ] T001: Audit all scripts for Windows-only assumptions (wt, powershell, C:\ paths, taskkill)
-- [ ] T002: openclaw-checkin.py — make paths portable (no hardcoded C:\Users\joelg paths)
-- [ ] T003: stop-message.txt — use env vars / relative paths instead of absolute Windows paths
-- [ ] T004: WSL support — detect WSL and route through wt.exe (WSL can call Windows executables)
-- [ ] T005: Mac support — Terminal.app / iTerm2 tab management (osascript exists but untested end-to-end)
-- [ ] T006: Linux support — gnome-terminal / tmux / screen session management
-- [ ] T007: Auto-detect platform and select correct launch method without user config
-- [ ] T008: EC2 test — spin up macOS EC2 (mac1.metal or mac2.metal), install Claude Code, run test suite + dry-run, verify osascript tab launch
-- [ ] T009: EC2 test — spin up Amazon Linux 2 EC2, install Claude Code, run test suite + dry-run, verify gnome-terminal/tmux fallback
-- [ ] T010: EC2 test — spin up Windows Server EC2, install Windows Terminal + Claude Code, run test suite + live context reset, verify tab close
-- [ ] T011: Test end-to-end on WSL2 (route through Windows Terminal via wt.exe from WSL)
-- [ ] T012: Update README with cross-platform install + usage docs
-- [ ] T013: Package for pip install with platform-appropriate defaults
+- [x] T001: Audit all scripts for Windows-only assumptions. Results:
+  - `new_session.py`: Already well-structured with `IS_WIN`/`IS_MAC` guards. All Windows code (tasklist, wmic, PowerShell, STARTUPINFO, taskkill, closeOnExit, wt) is properly gated. Unix branches exist for process mgmt, tab launch, and kill.
+  - Gaps: (a) `_has_command()` uses `which` — should use `shutil.which()` (stdlib, works everywhere). (b) macOS `osascript` branch untested, no tab color, no prompt-file safety. (c) Linux only supports `gnome-terminal`, falls back to bare `bash -c &` (no tab). (d) No tab auto-close on Linux (process dies but terminal tab stays). (e) `_restore_tab_focus()` is Windows-only (no-op on Mac/Linux).
+  - `openclaw-checkin.py`: Line 41 hardcodes `/home/ubu/.openclaw/workspace/...` (WSL-specific TRACKER_PATH). Rest is portable.
+  - `configure_hook.py`: Fully portable (uses `~` expansion, no platform-specific code).
+  - `task_claims.py`: Fully portable (IS_WIN guards for msvcrt/fcntl locking, ctypes for PID check).
+  - `scripts/test.py`: Tests branch on IS_WIN for launch cmd assertions. Works on both platforms.
+- [x] T002: openclaw-checkin.py — make TRACKER_PATH portable via `Path.home()` + `OPENCLAW_TRACKER` env var (PR #44)
+- [x] T003: Replace `_has_command()` `which` subprocess with `shutil.which()` (stdlib, cross-platform) (PR #44)
+- [x] T004: WSL support — detect WSL via /proc/version, route through wt.exe + wsl.exe, prompt-file approach, wslpath conversion (PR #49, 126 tests)
+- [x] T005: Mac support — prompt-file approach for osascript, tab title via escape sequence (PR #50, 134 tests)
+- [x] T006: Linux support — prompt-file, tmux new-window fallback, tab title via escape + args (PR #51, 149 tests)
+- [x] T007: Auto-detect platform already done via IS_WIN/IS_MAC branching throughout codebase
+- [x] T008: EC2 test — macOS (mac-ztsa-test mac2.metal, Darwin arm64, Python 3.9.6). 140/140 tests pass. Dry-run confirms osascript + Terminal.app + prompt-file. SSH key provisioned via SSM (PR #58)
+- [x] T009: EC2 test — Ubuntu 22.04 (ctx-reset-ubuntu t3.medium). 105/105 tests pass. Dry-run confirms gnome-terminal launch, Unix process tree walker (PR #47)
+- [x] T010: EC2 test — Windows Server 2022 (i-0abb3cce24d38d068 t3.medium). 115/115 tests pass. SSM provisioning, SFTP sync, PowerShell-compatible commands (PR #48)
+- [x] T011: WSL E2E test — 140/140 pass in WSL, IS_WSL detection verified, wt.exe + wslpath routing correct (PR #54)
+- [x] T012: Update README with cross-platform platform table, WSL docs, prompt-file note, test counts (PR #52)
+- [x] T013: Fix pip entry points (context-reset now injects --close-old-tab), bump to v1.1.0, add classifiers (PR #53)
 
 ## Launch UX Fixes (017)
 
@@ -221,7 +227,48 @@ Goal: share this system with others who aren't on Windows Terminal.
 
 - [x] T001: Prompts containing `;` (e.g. `return null;`) caused WT error 0x80070002. Fix: write prompt to `.claude-next-prompt` file, use `-EncodedCommand` (Base64 UTF-16LE) so no special chars reach WT's parser (PR #42).
 
-## Session 2026-05-03 handoff
+## Fix focus steal + phantom autoclose (026)
 
-PRs merged: #37 (closeOnExit fix), #38 (merge scripts), #39 (remove stale focus code), #42 (WT semicolon fix).
-Cleaned up 6 stale git worktrees.
+- [x] T001: Replace OS-level SetForegroundWindow with `wt focus-tab --previous` for proper tab focus restore (PR #43)
+- [x] T002: Reduce closeOnExit=always window from 1.5s to 0.2s to prevent phantom tab closures (PR #43)
+
+## Atomic focus restore (027)
+
+- [x] T001: Replace background thread focus-tab with atomic WT chaining (`new-tab ... ; focus-tab --previous`). Zero visible tab flash. Remove `_restore_tab_focus()` and `threading` import (PR #46).
+
+## Remove dead openclaw-checkin (028)
+
+- [x] T001: Remove `scripts/openclaw-checkin.py` (archived), openclaw section from stop-message.txt, references from CLAUDE.md and README (PR #45).
+
+## Code Review (029)
+
+- [x] T001: Full code review of new_session.py, context_reset.py, task_claims.py, README.md
+  - Code is solid: well-structured platform branching, proper safety checks, clean two-phase verification
+  - Found README issues: non-existent `--no-close` flag, outdated test counts (PR #56)
+
+## GitHub Actions CI (030)
+
+- [x] T001: Add CI workflow — 3 OS x 2 Python versions matrix (PR #57)
+  - Fixed: test "contains prompt" failing on macOS/Linux (prompt-file approach)
+  - Fixed: `license = "MIT"` incompatible with Python 3.8 setuptools
+  - All 7 jobs green: ubuntu/windows/macos x 3.8/3.12 + secret scan
+
+## Session 2026-05-04c handoff
+
+PRs #56-#57 merged. CI is live — every PR now runs tests on 3 OS x 2 Python.
+T008 done — 140/140 on macOS EC2. Milestone 016 (cross-platform) is 100% complete.
+All platforms verified live: Windows 11, Windows Server 2022, Ubuntu 22.04, WSL2, macOS Darwin arm64.
+T603 added to hook-runner: user correction detector meta-hook.
+PR #58 merged. CI green across all 7 jobs.
+
+## Session 2026-05-04a handoff
+
+PRs merged: #48-#55 (8 PRs).
+- #48: Windows EC2 115/115 tests pass (SSM provisioning, SFTP sync)
+- #49: WSL wt.exe routing (IS_WSL detection, wslpath)
+- #50: macOS prompt-file + tab title
+- #51: Linux tmux fallback
+- #52: README cross-platform docs
+- #53: pip entry point fix + v1.1.0
+- #54: WSL E2E test 140/140
+- #55: User Guide + Admin Reference (L3) HTML reports
