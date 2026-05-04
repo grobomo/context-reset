@@ -290,6 +290,16 @@ Each context reset opens a new tab but fails to kill the old one. After N failed
 
 - [x] T007: Update HTML reports with 033 fixes — focus restore, kill retry, duplicate guard, updated test counts (162) (PR #65)
 
+## Session 2026-05-04h handoff
+
+PRs #63-#66 merged this session. Fixed focus steal and tab multiplication:
+- PR #63: Win32 focus save/restore + taskkill stderr capture and retry
+- PR #64: Duplicate session guard (transcript age <10s = active, refuse to spawn)
+- PR #65: Updated HTML reports with 033 fixes
+- PR #66: Replaced single-shot SetForegroundWindow with daemon monitor thread (5s polling). Live tested 5/5 PASS — WT steals 1-3 times per launch, all caught and restored. `scripts/test_focus_live.py` added for repeatable verification.
+
+162/162 unit tests. All CI green. Zero unchecked items. Project is stable.
+
 ## Session 2026-05-04g handoff
 
 All 033 tasks done (PRs #63, #64). Three fixes for two critical bugs:
