@@ -55,10 +55,30 @@ The prompt tells the new session to read SESSION_STATE.md (transcript context) a
 - **Safety**: Won't kill a shell that owns multiple Claude processes.
 - **Session state handoff**: Before launching the new tab, reads the last ~500 JSONL lines from the transcript (efficient reverse-read, no full file load), parses them into clean readable conversation text (user messages, Claude responses, tool summaries, hook firings, boundaries), and writes `SESSION_STATE.md` capped at ~8K tokens so the next session can actually read it.
 
+## EC2 Test Infrastructure
+
+Cross-platform testing uses EC2 instances. **Do not defer EC2 tests for cost reasons** — the cost of running tests ($0.50-$7/hr depending on instance) is negligible compared to the cost of shipping untested code. Penny wise, dollar foolish.
+
+| Target | Instance | Type | Cost/hr | Key |
+|--------|----------|------|---------|-----|
+| ubuntu | ctx-reset-ubuntu | t3.medium | ~$0.04 | jumpbox.pem |
+| windows | ctx-reset-windows | t3.medium | ~$0.05 | jumpbox.pem |
+| macos | mac-ztsa-test | mac2.metal | ~$6.80 | jumpbox.pem (added via SSM) |
+
+Instances are stopped when not in use. Start with `aws.sh ec2 start <id>`, stop after testing.
+
+```bash
+scripts/ec2-test.sh ubuntu    # 105+ tests on Ubuntu
+scripts/ec2-test.sh windows   # 115+ tests on Windows Server
+scripts/ec2-test.sh macos     # 140 tests on macOS (darwin arm64)
+scripts/ec2-test.sh connect macos  # SSH into instance
+```
+
 ## Testing
 
 ```bash
-python scripts/test.py    # 115 tests
+python scripts/test.py    # 149 tests (all platforms via mocks)
+python scripts/test_task_claims.py  # 35 tests
 python context_reset.py --project-dir . --dry-run   # verify reset command
 python new_session.py --project-dir . --dry-run     # verify new session command
 ```
