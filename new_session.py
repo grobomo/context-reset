@@ -891,10 +891,25 @@ def build_launch_cmd(project_dir, prompt, tab_title, tab_color):
             ';', 'focus-tab', '--previous',
         ]
     elif IS_MAC:
-        escaped = prompt.replace("'", "'\\''")
+        # Write prompt to file — avoids quote/semicolon issues in osascript strings.
+        prompt_file = os.path.join(project_dir, '.claude-next-prompt')
+        with open(prompt_file, 'w', encoding='utf-8') as f:
+            f.write(prompt)
+        safe_title = tab_title.replace('"', '').replace("'", "")
+        escaped_file = prompt_file.replace('"', '\\"')
+        escaped_dir = project_dir.replace('"', '\\"')
+        # Shell command: read prompt from file, clean up, set title, run claude.
+        shell_cmd = (
+            f'p=$(cat "{escaped_file}"); '
+            f'rm -f "{escaped_file}"; '
+            f'printf "\\033]0;{safe_title}\\007"; '
+            f'cd "{escaped_dir}" && claude "$p"'
+        )
+        # Escape for osascript double-quoted string
+        osa_cmd = shell_cmd.replace('\\', '\\\\').replace('"', '\\"')
         return (
-            f"""osascript -e 'tell application "Terminal" to do script """
-            f""""cd \\"{project_dir}\\" && claude \\'{escaped}\\'"'"""
+            f'osascript -e \'tell application "Terminal" to do script '
+            f'"{osa_cmd}"\''
         )
     else:
         escaped = prompt.replace("'", "'\\''")
