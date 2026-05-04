@@ -912,15 +912,34 @@ def build_launch_cmd(project_dir, prompt, tab_title, tab_color):
             f'"{osa_cmd}"\''
         )
     else:
-        escaped = prompt.replace("'", "'\\''")
-        # Try gnome-terminal first, fall back to background process
+        # Write prompt to file — consistent with Windows/WSL/Mac, avoids
+        # quote escaping issues in nested shell invocations.
+        prompt_file = os.path.join(project_dir, '.claude-next-prompt')
+        with open(prompt_file, 'w', encoding='utf-8') as f:
+            f.write(prompt)
+        safe_title = tab_title.replace('"', '').replace("'", "")
+        escaped_file = prompt_file.replace("'", "'\\''")
+        escaped_dir = project_dir.replace("'", "'\\''")
+        # Shell command: read prompt from file, clean up, set title, run claude.
+        shell_cmd = (
+            f"p=$(cat '{escaped_file}'); "
+            f"rm -f '{escaped_file}'; "
+            f"printf '\\033]0;{safe_title}\\007'; "
+            f"cd '{escaped_dir}' && claude \"$p\""
+        )
         if _has_command('gnome-terminal'):
             return (
-                f"gnome-terminal --tab --title '{tab_title}' "
-                f"-- bash -c 'cd \"{project_dir}\" && claude '\"'\"'{escaped}'\"'\"''"
+                f"gnome-terminal --tab --title '{safe_title}' "
+                f"-- bash -c '{shell_cmd}'"
+            )
+        elif _has_command('tmux'):
+            # tmux: create new window with title, run claude inside it.
+            return (
+                f"tmux new-window -n '{safe_title}' "
+                f"bash -c '{shell_cmd}'"
             )
         else:
-            return f"bash -c 'cd \"{project_dir}\" && claude '\"'\"'{escaped}'\"'\"'' &"
+            return f"bash -c '{shell_cmd}' &"
 
 
 

@@ -471,6 +471,50 @@ with tempfile.TemporaryDirectory() as d:
         context_reset.IS_WIN = old_win
         context_reset.IS_MAC = old_mac
 
+# --- Linux build_launch_cmd ---
+print("\n=== Linux support ===")
+with tempfile.TemporaryDirectory() as d:
+    old_wsl = context_reset.IS_WSL
+    old_win = context_reset.IS_WIN
+    old_mac = context_reset.IS_MAC
+    old_has_cmd = context_reset._has_command
+    try:
+        context_reset.IS_WSL = False
+        context_reset.IS_WIN = False
+        context_reset.IS_MAC = False
+        # Test gnome-terminal path
+        context_reset._has_command = lambda name: name == 'gnome-terminal'
+        cmd_gt = context_reset.build_launch_cmd(d, "test prompt", "linux-title", "#2D5F2D")
+        test("Linux gnome-terminal: is string", isinstance(cmd_gt, str))
+        test("Linux gnome-terminal: has gnome-terminal", "gnome-terminal" in cmd_gt)
+        test("Linux gnome-terminal: has tab title", "linux-title" in cmd_gt)
+        prompt_file = os.path.join(d, '.claude-next-prompt')
+        test("Linux gnome-terminal: writes prompt file", os.path.exists(prompt_file))
+        test("Linux gnome-terminal: has claude", "claude" in cmd_gt)
+        # Test tmux fallback
+        context_reset._has_command = lambda name: name == 'tmux'
+        cmd_tmux = context_reset.build_launch_cmd(d, "test prompt", "tmux-title", "#2D5F2D")
+        test("Linux tmux: is string", isinstance(cmd_tmux, str))
+        test("Linux tmux: has tmux", "tmux" in cmd_tmux)
+        test("Linux tmux: has new-window", "new-window" in cmd_tmux)
+        test("Linux tmux: has tab title", "tmux-title" in cmd_tmux)
+        test("Linux tmux: has claude", "claude" in cmd_tmux)
+        # Test bare bash fallback
+        context_reset._has_command = lambda name: False
+        cmd_bare = context_reset.build_launch_cmd(d, "test prompt", "bare-title", "#2D5F2D")
+        test("Linux bare: is string", isinstance(cmd_bare, str))
+        test("Linux bare: has bash -c", "bash -c" in cmd_bare)
+        test("Linux bare: has background &", cmd_bare.endswith("&"))
+        test("Linux bare: has claude", "claude" in cmd_bare)
+        # Semicolons in prompt safe (prompt in file, not inline)
+        cmd_semi = context_reset.build_launch_cmd(d, "return null; next", "t", "#000000")
+        test("Linux prompt semicolons safe", "return null" not in cmd_semi)
+    finally:
+        context_reset.IS_WSL = old_wsl
+        context_reset.IS_WIN = old_win
+        context_reset.IS_MAC = old_mac
+        context_reset._has_command = old_has_cmd
+
 # --- _resolve_worktree_root ---
 print("\n=== _resolve_worktree_root ===")
 test("normal path unchanged",
