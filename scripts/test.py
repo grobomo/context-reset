@@ -724,6 +724,51 @@ if sys.platform == "win32":
 else:
     print("  (skipped on non-Windows)")
 
+# --- Duplicate session guard ---
+print("\n=== duplicate session guard ===")
+with tempfile.TemporaryDirectory() as d:
+    fake_project = os.path.join(d, "dup-test")
+    os.makedirs(fake_project)
+
+    # Create a fake logs dir with a recently-written transcript
+    logs_slug = os.path.abspath(fake_project).replace("\\", "-").replace("/", "-").replace(":", "-")
+    if logs_slug.startswith("-"):
+        logs_slug = logs_slug[1:]
+    fake_logs = os.path.join(d, "dotclaude", "projects", logs_slug)
+    os.makedirs(fake_logs)
+    fresh_jsonl = os.path.join(fake_logs, "active-session.jsonl")
+    with open(fresh_jsonl, "w") as f:
+        f.write('{"type":"test"}\n')
+
+    # Monkey-patch get_project_logs_dir to return our fake dir
+    orig_logs = context_reset.get_project_logs_dir
+    context_reset.get_project_logs_dir = lambda proj: fake_logs
+
+    # Test: fresh transcript (< 10s old) should trigger guard
+    newest, _ = context_reset.get_newest_jsonl(fake_logs)
+    age = time.time() - os.path.getmtime(newest)
+    test("fresh transcript detected (age < 10s)", age < 10)
+
+    # Test: old transcript (> 10s) should NOT trigger guard
+    old_jsonl = os.path.join(fake_logs, "old-session.jsonl")
+    with open(old_jsonl, "w") as f:
+        f.write('{"type":"old"}\n')
+    # Set mtime to 60 seconds ago
+    old_time = time.time() - 60
+    os.utime(old_jsonl, (old_time, old_time))
+    # Remove the fresh file so old is the newest
+    os.remove(fresh_jsonl)
+    newest2, _ = context_reset.get_newest_jsonl(fake_logs)
+    age2 = time.time() - os.path.getmtime(newest2)
+    test("old transcript not flagged (age > 10s)", age2 > 10)
+
+    # Test: no transcript at all should not trigger guard
+    os.remove(old_jsonl)
+    newest3, _ = context_reset.get_newest_jsonl(fake_logs)
+    test("no transcript returns None", newest3 is None)
+
+    context_reset.get_project_logs_dir = orig_logs
+
 # --- Summary ---
 print(f"\n{'='*40}")
 print(f"Results: {PASS} passed, {FAIL} failed")
