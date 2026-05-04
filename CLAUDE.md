@@ -77,7 +77,7 @@ scripts/ec2-test.sh connect macos  # SSH into instance
 ## Testing
 
 ```bash
-python scripts/test.py    # 149 tests (all platforms via mocks)
+python scripts/test.py    # 162 tests (all platforms via mocks)
 python scripts/test_task_claims.py  # 35 tests
 python context_reset.py --project-dir . --dry-run   # verify reset command
 python new_session.py --project-dir . --dry-run     # verify new session command

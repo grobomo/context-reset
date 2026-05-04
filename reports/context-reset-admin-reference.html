@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>context-reset v1.1.0 - Admin Reference (L3)</title>
+<title>context-reset v1.2.0 - Admin Reference (L3)</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif; background: #f5f5f5; color: #333; line-height: 1.6; }
@@ -49,10 +49,10 @@
 <body>
 
 <div class="header">
-  <h1>context-reset v1.1.0 &mdash; Admin Reference</h1>
+  <h1>context-reset v1.2.0 &mdash; Admin Reference</h1>
   <div class="subtitle">L3 Technical Documentation: Architecture, Internals, Cross-Platform Verification</div>
   <div class="meta">
-    <span>Version: 1.1.0</span>
+    <span>Version: 1.2.0</span>
     <span>Date: 2026-05-04</span>
     <span>Tests: 197 (162 core + 35 task_claims)</span>
     <span>Platforms: 4 verified</span>
@@ -78,7 +78,7 @@
     <li><a href="#files">File Reference</a></li>
     <li><a href="#config">Configuration Reference</a></li>
     <li><a href="#ec2-infra">EC2 Test Infrastructure</a></li>
-    <li><a href="#changelog">v1.1.0 Changelog</a></li>
+    <li><a href="#changelog">v1.2.0 Changelog</a></li>
   </ol>
 </div>
 
@@ -552,7 +552,7 @@ Python 3.10.12
   <tr><td>Two-phase verification</td><td>Won't kill old tab until new Claude is confirmed working (process count + transcript activity)</td></tr>
   <tr><td>Multi-Claude guard</td><td>Refuses to kill a shell that owns &gt;1 Claude processes</td></tr>
   <tr><td>Duplicate session guard</td><td>Pre-launch check: if target project transcript was written &lt;10s ago, refuses to spawn (PR #64)</td></tr>
-  <tr><td>OS-level focus restore</td><td>Win32 <code>GetForegroundWindow</code>/<code>SetForegroundWindow</code> saves and restores active window around <code>wt new-tab</code> (PR #63)</td></tr>
+  <tr><td>OS-level focus restore</td><td>Background monitor thread polls for 5s using Win32 <code>GetForegroundWindow</code>/<code>SetForegroundWindow</code>, catches 1-3 async WT focus steals per launch (PRs #63, #66)</td></tr>
   <tr><td>Kill retry</td><td><code>taskkill</code> captures stderr, retries once on failure, verifies PID death via <code>os.kill(pid, 0)</code> (PR #63)</td></tr>
   <tr><td>Process tree walk</td><td>Finds the correct terminal shell PID, not inner Bash tool shells</td></tr>
   <tr><td>Detached kill (Windows)</td><td><code>taskkill /T</code> runs in a detached subprocess so it doesn't kill the caller</td></tr>
@@ -570,7 +570,7 @@ Python 3.10.12
   <tr><td><code>new_session.py</code></td><td>Core module: all shared functions + new-session entry point</td></tr>
   <tr><td><code>context_reset.py</code></td><td>Thin wrapper: injects <code>--close-old-tab</code> then calls <code>new_session.main()</code></td></tr>
   <tr><td><code>task_claims.py</code></td><td>Multi-tab task negotiation with OS-level file locks</td></tr>
-  <tr><td><code>pyproject.toml</code></td><td>Pip packaging config (v1.1.0, two CLI entry points)</td></tr>
+  <tr><td><code>pyproject.toml</code></td><td>Pip packaging config (v1.2.0, two CLI entry points)</td></tr>
   <tr><td><code>scripts/test.py</code></td><td>162 tests for new_session.py</td></tr>
   <tr><td><code>scripts/test_task_claims.py</code></td><td>35 tests for task_claims.py</td></tr>
   <tr><td><code>scripts/wsl-test.sh</code></td><td>WSL E2E test runner (calls from Windows into WSL)</td></tr>
@@ -610,7 +610,7 @@ Python 3.10.12
 </div>
 
 <!-- ====== 14. Changelog ====== -->
-<h2 id="changelog">14. Changelog (PRs #48&ndash;#64)</h2>
+<h2 id="changelog">14. Changelog (PRs #48&ndash;#67)</h2>
 
 <table>
   <tr><th>PR</th><th>Change</th></tr>
@@ -619,18 +619,21 @@ Python 3.10.12
   <tr><td>#50</td><td>macOS: prompt-file approach for osascript, tab title via escape sequence</td></tr>
   <tr><td>#51</td><td>Linux: prompt-file, tmux <code>new-window</code> fallback, bare <code>bash -c &amp;</code> last resort</td></tr>
   <tr><td>#52</td><td>README: cross-platform table, WSL docs, prompt-file note, test counts</td></tr>
-  <tr><td>#53</td><td>pip: fix <code>context-reset</code> entry point (<code>main_context_reset</code>), bump to v1.1.0</td></tr>
+  <tr><td>#53</td><td>pip: fix <code>context-reset</code> entry point (<code>main_context_reset</code>), bump to v1.2.0</td></tr>
   <tr><td>#54</td><td>WSL E2E: 140/140 pass, <code>IS_WSL=True</code> detection verified, <code>wt.exe</code> routing correct</td></tr>
   <tr><td>#61</td><td>Cleanup: archive stale worktrees, prune 19 local + 29 remote branches</td></tr>
   <tr><td>#62</td><td>Docs: fix README Quick Start, add hook-runner integration docs</td></tr>
   <tr><td>#63</td><td>Fix focus steal (Win32 foreground save/restore) and kill failures (stderr capture, retry, PID verify)</td></tr>
   <tr><td>#64</td><td>Duplicate session guard: pre-launch transcript age check, refuse to spawn if active</td></tr>
+  <tr><td>#65</td><td>Update HTML reports with 033 fixes (focus restore, kill retry, duplicate guard, 162 tests)</td></tr>
+  <tr><td>#66</td><td>Reliable focus restore: background monitor thread (5s polling, catches 1-3 WT steals per launch)</td></tr>
+  <tr><td>#67</td><td>Skip duplicate guard in context-reset mode (own transcript is always fresh)</td></tr>
 </table>
 
 </div>
 
 <div class="footer">
-  context-reset v1.1.0 | L3 Admin Reference | <a href="https://github.com/grobomo/context-reset">github.com/grobomo/context-reset</a> | MIT License
+  context-reset v1.2.0 | L3 Admin Reference | <a href="https://github.com/grobomo/context-reset">github.com/grobomo/context-reset</a> | MIT License
 </div>
 
 </body>
