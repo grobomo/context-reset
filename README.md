@@ -128,21 +128,7 @@ The real power is combining `new_session.py` with hook-runner's `auto-continue.j
 
 This creates a fully autonomous coding agent that works through a task list without human intervention.
 
-### OpenClaw checkin (cross-agent status reporting)
-
-The stop-message also instructs Claude Code to call `openclaw-checkin.py` between tasks:
-
-```bash
-python3 ~/.claude/scripts/openclaw-checkin.py \
-  --status done --task TXXX --detail "brief summary" \
-  --project PROJECT_NAME --fire-and-forget
-```
-
-This sends a status update to OpenClaw's chat API so a manager agent (e.g. Coconut) can track progress across multiple Claude Code sessions. Statuses: `done`, `blocked`, `progress`, `tests`, `error`.
-
-`--fire-and-forget` makes it non-blocking (5s timeout) — Claude doesn't wait for a response.
-
-### Calling from external systems (OpenClaw, scripts, cron)
+### Calling from external systems (scripts, cron)
 
 When launching Claude Code from outside a terminal (e.g. from an AI agent, cron job, or automation script):
 
