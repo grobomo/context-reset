@@ -945,6 +945,42 @@ def build_launch_cmd(project_dir, prompt, tab_title, tab_color):
 
 
 
+def _save_foreground_window():
+    """Save the current foreground window handle (Windows only).
+
+    Returns the HWND as an int, or None on non-Windows / failure.
+    """
+    if not IS_WIN:
+        return None
+    try:
+        import ctypes
+        return ctypes.windll.user32.GetForegroundWindow()
+    except Exception:
+        return None
+
+
+def _restore_foreground_window(hwnd):
+    """Restore OS-level focus to a previously saved window handle.
+
+    Uses the Alt-key trick: Windows blocks SetForegroundWindow unless
+    the calling thread owns the foreground lock. Sending a synthetic
+    Alt key release satisfies that requirement.
+    """
+    if not IS_WIN or not hwnd:
+        return
+    try:
+        import ctypes
+        # Alt-key trick to satisfy SetForegroundWindow's foreground-lock rule
+        ctypes.windll.user32.keybd_event(0x12, 0, 0x0002, 0)  # VK_MENU up
+        result = ctypes.windll.user32.SetForegroundWindow(hwnd)
+        if result:
+            log("Restored OS-level foreground window")
+        else:
+            log("WARNING: SetForegroundWindow returned 0 (may need retry)")
+    except Exception as e:
+        log(f"WARNING: could not restore foreground window: {e}")
+
+
 def _has_command(name):
     """Check if a command exists on PATH."""
     return shutil.which(name) is not None
@@ -1001,44 +1037,55 @@ def _kill_old_tab_windows(shell_pid, close_tab):
         f'_lf = os.path.join(_ld, datetime.datetime.now().strftime("%Y-%m-%d") + ".log"); '
         f'_log = lambda m: open(_lf, "a").write("[" + datetime.datetime.now().strftime("%H:%M:%S") + "] [detached-kill] " + m + "\\n"); '
     )
+    # Kill helper: runs taskkill, captures stderr, retries once on failure,
+    # and verifies the process is actually dead.
+    kill_helper = (
+        'def _kill(pid, si, _log):\n'
+        '    for attempt in range(2):\n'
+        '        r = subprocess.run(f"taskkill /F /T /PID {pid}", startupinfo=si,\n'
+        '            capture_output=True, text=True)\n'
+        '        _log(f"taskkill attempt {attempt+1}: exit={r.returncode}")\n'
+        '        if r.stderr.strip():\n'
+        '            _log(f"taskkill stderr: {r.stderr.strip()}")\n'
+        '        if r.returncode == 0:\n'
+        '            return True\n'
+        '        import time; time.sleep(0.5)\n'
+        '        try:\n'
+        '            os.kill(pid, 0)\n'
+        '        except OSError:\n'
+        '            _log(f"PID {pid} confirmed dead (os.kill check)"); return True\n'
+        '    _log(f"FAILED: PID {pid} still alive after 2 attempts")\n'
+        '    return False\n'
+    )
     if close_tab:
-        # Set closeOnExit=always BEFORE launching the detached kill script.
-        # When taskkill kills the shell, WT sees the process exit and
-        # auto-closes that specific tab. Then the detached script restores
-        # closeOnExit=graceful after a short delay.
-        #
-        # This is safer than `wt close-tab` which closes the ACTIVE tab
-        # (not necessarily the dead one) and can kill the wrong session.
         set_wt_close_on_exit("always")
         wt_settings = repr(get_wt_settings_path())
         kill_script = (
-            f'import subprocess, time, json, os, datetime; '
-            f'{log_snippet}'
-            f'_log("Killing PID {shell_pid} (close_tab=True)"); '
-            f'si = subprocess.STARTUPINFO(); '
-            f'si.dwFlags |= subprocess.STARTF_USESHOWWINDOW; '
-            f'si.wShowWindow = 0; '
-            f'rc = subprocess.call("taskkill /F /T /PID {shell_pid}", '
-            f'startupinfo=si, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); '
-            f'_log("taskkill exit code: " + str(rc)); '
-            f'time.sleep(0.2); '
-            f'_wt = {wt_settings}; '
-            f'_s = json.load(open(_wt)); '
-            f'_s.setdefault("profiles", {{}}).setdefault("defaults", {{}})["closeOnExit"] = "graceful"; '
-            f'json.dump(_s, open(_wt, "w"), indent=4, ensure_ascii=False); '
+            f'import subprocess, time, json, os, datetime\n'
+            f'{log_snippet}\n'
+            f'{kill_helper}\n'
+            f'_log("Killing PID {shell_pid} (close_tab=True)")\n'
+            f'si = subprocess.STARTUPINFO()\n'
+            f'si.dwFlags |= subprocess.STARTF_USESHOWWINDOW\n'
+            f'si.wShowWindow = 0\n'
+            f'_kill({shell_pid}, si, _log)\n'
+            f'time.sleep(0.2)\n'
+            f'_wt = {wt_settings}\n'
+            f'_s = json.load(open(_wt))\n'
+            f'_s.setdefault("profiles", {{}}).setdefault("defaults", {{}})["closeOnExit"] = "graceful"\n'
+            f'json.dump(_s, open(_wt, "w"), indent=4, ensure_ascii=False)\n'
             f'_log("closeOnExit -> graceful")'
         )
     else:
         kill_script = (
-            f'import subprocess, os, datetime; '
-            f'{log_snippet}'
-            f'_log("Killing PID {shell_pid} (close_tab=False)"); '
-            f'si = subprocess.STARTUPINFO(); '
-            f'si.dwFlags |= subprocess.STARTF_USESHOWWINDOW; '
-            f'si.wShowWindow = 0; '
-            f'rc = subprocess.call("taskkill /F /T /PID {shell_pid}", '
-            f'startupinfo=si, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); '
-            f'_log("taskkill exit code: " + str(rc))'
+            f'import subprocess, time, os, datetime\n'
+            f'{log_snippet}\n'
+            f'{kill_helper}\n'
+            f'_log("Killing PID {shell_pid} (close_tab=False)")\n'
+            f'si = subprocess.STARTUPINFO()\n'
+            f'si.dwFlags |= subprocess.STARTF_USESHOWWINDOW\n'
+            f'si.wShowWindow = 0\n'
+            f'_kill({shell_pid}, si, _log)'
         )
     subprocess.Popen(
         [sys.executable, '-c', kill_script],
@@ -1370,6 +1417,10 @@ def main():
     before = count_claude_processes()
     log(f"Phase 1: launching new tab ({before} Claude processes before)")
 
+    # Save the OS-level foreground window BEFORE launching wt new-tab,
+    # which activates the WT window and steals focus from the user's app.
+    saved_hwnd = _save_foreground_window()
+
     if IS_WIN or IS_WSL:
         popen_kwargs = {}  # cmd is a list, no shell needed
     else:
@@ -1377,6 +1428,12 @@ def main():
     log(f"Launch cmd: {cmd}")
     subprocess.Popen(cmd, **popen_kwargs)
     log(f"New tab opened in {launch_name}")
+
+    # Restore OS-level focus. wt's focus-tab --previous handles tab focus
+    # within WT, but WT itself is now the foreground window. Push it back.
+    if saved_hwnd:
+        time.sleep(0.3)  # Let WT finish processing new-tab + focus-tab
+        _restore_foreground_window(saved_hwnd)
 
     if not close_old:
         # Signal the stop hook to let this tab idle
