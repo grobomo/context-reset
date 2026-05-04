@@ -662,6 +662,68 @@ with tempfile.TemporaryDirectory() as d:
 
     context_reset.get_project_logs_dir = orig_fn
 
+# --- Focus save/restore ---
+print("\n=== focus save/restore ===")
+if sys.platform == "win32":
+    hwnd = context_reset._save_foreground_window()
+    test("_save_foreground_window returns int", isinstance(hwnd, int))
+    test("_save_foreground_window returns non-zero", hwnd != 0)
+    # Restore should not raise (restoring current window is a no-op visually)
+    try:
+        context_reset._restore_foreground_window(hwnd)
+        test("_restore_foreground_window does not raise", True)
+    except Exception as e:
+        test(f"_restore_foreground_window does not raise ({e})", False)
+    # None should be safe no-op
+    context_reset._restore_foreground_window(None)
+    test("_restore_foreground_window(None) is safe", True)
+else:
+    result = context_reset._save_foreground_window()
+    test("_save_foreground_window returns None on non-Windows", result is None)
+    # Should be safe no-op
+    context_reset._restore_foreground_window(None)
+    test("_restore_foreground_window(None) is safe on non-Windows", True)
+
+# --- Kill script validation ---
+print("\n=== kill script validation ===")
+if sys.platform == "win32":
+    # Verify both kill script variants produce valid Python
+    captured_scripts = {}
+    real_popen = subprocess.Popen
+    def capture_popen(args, **kw):
+        if isinstance(args, list) and len(args) >= 3 and args[1] == '-c':
+            captured_scripts[len(captured_scripts)] = args[2]
+            return type('P', (), {'pid': 0})()
+        return real_popen(args, **kw)
+    subprocess.Popen = capture_popen
+    real_exit = sys.exit
+    class _FakeExit(Exception): pass
+    sys.exit = lambda c=0: (_ for _ in ()).throw(_FakeExit())
+    orig_close = context_reset.set_wt_close_on_exit
+    context_reset.set_wt_close_on_exit = lambda v: None
+    try:
+        context_reset._kill_old_tab_windows(99999, close_tab=False)
+    except _FakeExit:
+        pass
+    try:
+        context_reset._kill_old_tab_windows(99999, close_tab=True)
+    except _FakeExit:
+        pass
+    subprocess.Popen = real_popen
+    sys.exit = real_exit
+    context_reset.set_wt_close_on_exit = orig_close
+    for idx, script in captured_scripts.items():
+        label = "close_tab=True" if idx == 1 else "close_tab=False"
+        try:
+            compile(script, f'<kill_{label}>', 'exec')
+            test(f"kill script ({label}) is valid Python", True)
+        except SyntaxError as e:
+            test(f"kill script ({label}) is valid Python: {e}", False)
+        test(f"kill script ({label}) has retry logic", "_kill(" in script)
+        test(f"kill script ({label}) captures stderr", "stderr" in script)
+else:
+    print("  (skipped on non-Windows)")
+
 # --- Summary ---
 print(f"\n{'='*40}")
 print(f"Results: {PASS} passed, {FAIL} failed")
