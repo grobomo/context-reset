@@ -23,7 +23,6 @@ Audit log: ~/.claude/context-reset/YYYY-MM-DD.log (rotated daily)
 import argparse
 import base64
 import csv
-import ctypes
 import io
 import json
 import re
@@ -858,54 +857,30 @@ def build_launch_cmd(project_dir, prompt, tab_title, tab_color):
             return f"bash -c 'cd \"{project_dir}\" && claude '\"'\"'{escaped}'\"'\"'' &"
 
 
-def _save_foreground_window():
-    """Save the current foreground window handle (Windows only). Returns handle or None."""
-    if not IS_WIN:
-        return None
-    try:
-        return ctypes.windll.user32.GetForegroundWindow()
-    except Exception:
-        return None
+def _restore_tab_focus():
+    """Switch WT back to the previous tab after opening a new one.
 
-
-def _restore_foreground_window(hwnd, initial_delay=0.8, poll_delay=0.3):
-    """Restore focus to a saved window handle in a background thread (Windows only).
-
-    Runs in a daemon thread so it doesn't block the main flow. Waits for WT's
-    async focus steal (~0.5s after Popen) with a longer initial delay, then
-    retries for ~3s. Uses the ALT-key trick to satisfy Windows'
-    SetForegroundWindow restriction.
+    Uses `wt focus-tab --previous` which restores the actual TAB focus within
+    Windows Terminal — not just the OS window focus, which was the old approach.
+    Runs in a background thread with a short delay for WT to finish creating
+    the new tab.
     """
-    if not IS_WIN or not hwnd:
+    if not IS_WIN:
         return
 
     def _restore():
-        user32 = ctypes.windll.user32
         try:
-            # Wait for WT's async focus steal to land before checking
-            time.sleep(initial_delay)
-            for attempt in range(10):
-                current = user32.GetForegroundWindow()
-                if current == hwnd:
-                    # Confirm it's stable (not just checked before WT steals)
-                    time.sleep(0.1)
-                    if user32.GetForegroundWindow() == hwnd:
-                        log(f"Focus already on target window (attempt {attempt + 1})")
-                        return
-                # Press and release ALT to satisfy SetForegroundWindow's
-                # "caller must be foreground" restriction. keybd_event with
-                # KEYEVENTF_EXTENDEDKEY (0x1) and KEYEVENTF_KEYUP (0x2).
-                user32.keybd_event(0x12, 0, 0x1, 0)  # VK_MENU down
-                user32.keybd_event(0x12, 0, 0x1 | 0x2, 0)  # VK_MENU up
-                user32.BringWindowToTop(hwnd)
-                user32.SetForegroundWindow(hwnd)
-                if user32.GetForegroundWindow() == hwnd:
-                    log(f"Restored focus to original window (attempt {attempt + 1})")
-                    return
-                time.sleep(poll_delay)
-            log("WARNING: focus restore attempted 10 times over ~4s, may not have succeeded")
+            # Wait for WT to finish creating the new tab and switching to it
+            time.sleep(0.5)
+            subprocess.Popen(
+                ['wt', '-w', '0', 'focus-tab', '--previous'],
+                startupinfo=_si(),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            log("Sent focus-tab --previous to restore tab focus")
         except Exception as e:
-            log(f"WARNING: could not restore focus: {e}")
+            log(f"WARNING: could not restore tab focus: {e}")
 
     t = threading.Thread(target=_restore, daemon=True)
     t.start()
@@ -992,7 +967,7 @@ def _kill_old_tab_windows(shell_pid, close_tab):
             f'rc = subprocess.call("taskkill /F /T /PID {shell_pid}", '
             f'startupinfo=si, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); '
             f'_log("taskkill exit code: " + str(rc)); '
-            f'time.sleep(1.5); '
+            f'time.sleep(0.2); '
             f'_wt = {wt_settings}; '
             f'_s = json.load(open(_wt)); '
             f'_s.setdefault("profiles", {{}}).setdefault("defaults", {{}})["closeOnExit"] = "graceful"; '
@@ -1340,14 +1315,13 @@ def main():
     before = count_claude_processes()
     log(f"Phase 1: launching new tab ({before} Claude processes before)")
 
-    saved_hwnd = _save_foreground_window()
     if IS_WIN:
         popen_kwargs = {}
     else:
         popen_kwargs = {"shell": True}
     log(f"Launch cmd: {cmd}")
     subprocess.Popen(cmd, **popen_kwargs)
-    _restore_foreground_window(saved_hwnd)
+    _restore_tab_focus()
     log(f"New tab opened in {launch_name}")
 
     if not close_old:
