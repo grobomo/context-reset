@@ -264,17 +264,20 @@ Python 3.10.12
 <!-- macOS -->
 <div class="platform-card">
   <div class="card-header macos">
-    macOS (Mock-Verified)
-    <span class="badge info">8 mock tests</span>
+    macOS (Darwin arm64)
+    <span class="badge success">140/140 pass</span>
   </div>
   <div class="card-body">
     <p><strong>Launch:</strong> <code>osascript</code> (Terminal.app)<br>
-    <strong>Status:</strong> Mock-verified. Live EC2 test deferred (mac2.metal = $6.80/hr).</p>
-    <div class="terminal" data-title="macOS mock tests">
+    <strong>Verified:</strong> EC2 mac2.metal, Darwin 24.6.0, Python 3.9.6</p>
+    <div class="terminal" data-title="macOS EC2 — mac2.metal Darwin arm64">
 <span class="pass">PASS: macOS uses osascript / Terminal.app</span>
 <span class="pass">PASS: macOS writes prompt file</span>
 <span class="pass">PASS: macOS sets tab title</span>
-<span class="pass">PASS: macOS prompt semicolons safe</span></div>
+<span class="pass">PASS: macOS prompt semicolons safe</span>
+<span class="pass">PASS: prompt file written</span>
+<span class="pass">PASS: prompt file contains prompt</span>
+<span class="pass">Results: 140 passed, 0 failed</span></div>
   </div>
 </div>
 
