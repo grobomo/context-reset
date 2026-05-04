@@ -441,6 +441,36 @@ with tempfile.TemporaryDirectory() as d:
         context_reset.IS_WIN = old_win
         context_reset.IS_MAC = old_mac
 
+# --- macOS build_launch_cmd ---
+print("\n=== macOS support ===")
+with tempfile.TemporaryDirectory() as d:
+    old_wsl = context_reset.IS_WSL
+    old_win = context_reset.IS_WIN
+    old_mac = context_reset.IS_MAC
+    try:
+        context_reset.IS_WSL = False
+        context_reset.IS_WIN = False
+        context_reset.IS_MAC = True
+        cmd_mac = context_reset.build_launch_cmd(d, "test prompt", "mac-title", "#2D5F2D")
+        test("macOS returns string", isinstance(cmd_mac, str))
+        test("macOS uses osascript", "osascript" in cmd_mac)
+        test("macOS has Terminal.app", "Terminal" in cmd_mac)
+        # Prompt is written to file (not inline)
+        prompt_file = os.path.join(d, '.claude-next-prompt')
+        test("macOS writes prompt file", os.path.exists(prompt_file))
+        test("macOS prompt file content", open(prompt_file, encoding='utf-8').read() == "test prompt")
+        # Tab title set via escape sequence
+        test("macOS sets tab title", "mac-title" in cmd_mac)
+        # Claude is referenced in the shell command
+        test("macOS has claude in cmd", "claude" in cmd_mac)
+        # Semicolons in prompt don't break osascript (prompt is in file)
+        cmd_semi = context_reset.build_launch_cmd(d, "return null; next", "t", "#000000")
+        test("macOS prompt semicolons safe", "return null" not in cmd_semi)
+    finally:
+        context_reset.IS_WSL = old_wsl
+        context_reset.IS_WIN = old_win
+        context_reset.IS_MAC = old_mac
+
 # --- _resolve_worktree_root ---
 print("\n=== _resolve_worktree_root ===")
 test("normal path unchanged",
