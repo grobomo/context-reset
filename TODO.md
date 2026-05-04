@@ -213,7 +213,15 @@ Goal: share this system with others who aren't on Windows Terminal.
 
 - [x] T001: Remove `; focus-tab --previous` from build_launch_cmd and undefined `_refocus_previous_tab()` (PR #39)
 
+## Bug: set_wt_close_on_exit undefined (024)
+
+- [x] T001: `set_wt_close_on_exit` called but never defined. Added `get_wt_settings_path()` and `set_wt_close_on_exit()` back (lost during PR #38 merge).
+
+## Fix WT semicolon splitting (025)
+
+- [x] T001: Prompts containing `;` (e.g. `return null;`) caused WT error 0x80070002. Fix: write prompt to `.claude-next-prompt` file, use `-EncodedCommand` (Base64 UTF-16LE) so no special chars reach WT's parser (PR #42).
+
 ## Session 2026-05-03 handoff
 
-PRs merged: #37 (closeOnExit fix), #38 (merge scripts), #39 (remove stale focus code).
-Cleaned up 6 stale git worktrees. Next: live test a real context reset to verify old tab closes.
+PRs merged: #37 (closeOnExit fix), #38 (merge scripts), #39 (remove stale focus code), #42 (WT semicolon fix).
+Cleaned up 6 stale git worktrees.
