@@ -9,8 +9,8 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -W 2>/dev/null || pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd -W 2>/dev/null || pwd)"
 
 IP="${CTX_RESET_WIN_IP:-3.128.32.126}"
 USER="Administrator"
@@ -45,37 +45,41 @@ fi
 # Check environment
 echo "Checking Windows environment..."
 $SSH_CMD "systeminfo | findstr /B /C:\"OS Name\" /C:\"OS Version\"" 2>&1 || true
-$SSH_CMD "python --version 2>&1 || python3 --version 2>&1 || echo 'Python not found'" 2>&1
-$SSH_CMD "where wt 2>nul || echo 'Windows Terminal not found'" 2>&1
+$SSH_CMD "try { python --version } catch { Write-Output 'Python not found' }" 2>&1 || true
+$SSH_CMD "try { where.exe wt } catch { Write-Output 'Windows Terminal not found' }" 2>&1 || true
 
 if [[ "$ACTION" == "setup" ]]; then
     echo "Setup check complete."
     exit 0
 fi
 
-# Sync project files
+# Sync project files via SFTP (works regardless of remote shell)
 echo "Syncing project files..."
 REMOTE_DIR="C:/temp/context-reset-test"
-$SSH_CMD "if not exist $REMOTE_DIR\\scripts mkdir $REMOTE_DIR\\scripts" 2>&1 || true
+$SSH_CMD "New-Item -ItemType Directory -Path '$REMOTE_DIR/scripts' -Force | Out-Null" 2>&1 || true
 
+SFTP_BATCH=$(mktemp)
 for f in new_session.py context_reset.py task_claims.py; do
-    $SCP_CMD "$PROJECT_DIR/$f" "$USER@$IP:$REMOTE_DIR/$f"
+    echo "put \"$PROJECT_DIR/$f\" \"$REMOTE_DIR/$f\"" >> "$SFTP_BATCH"
 done
 for f in scripts/test.py scripts/test_task_claims.py; do
     if [[ -f "$PROJECT_DIR/$f" ]]; then
-        $SCP_CMD "$PROJECT_DIR/$f" "$USER@$IP:$REMOTE_DIR/$f"
+        echo "put \"$PROJECT_DIR/$f\" \"$REMOTE_DIR/$f\"" >> "$SFTP_BATCH"
     fi
 done
+sftp -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i "$KEY" -b "$SFTP_BATCH" "$USER@$IP" 2>&1
+rm -f "$SFTP_BATCH"
+echo "Files synced."
 
 # Run tests
 echo ""
 echo "=== Running test suite on Windows ==="
-$SSH_CMD "cd /d $REMOTE_DIR && python scripts/test.py 2>&1" || true
+$SSH_CMD "Set-Location '$REMOTE_DIR'; python scripts/test.py 2>&1" || true
 
 # Dry-run
 echo ""
 echo "=== Running dry-run on Windows ==="
-$SSH_CMD "cd /d $REMOTE_DIR && python new_session.py --project-dir $REMOTE_DIR --dry-run 2>&1" || true
+$SSH_CMD "Set-Location '$REMOTE_DIR'; python new_session.py --project-dir '$REMOTE_DIR' --dry-run 2>&1" || true
 
 echo ""
 echo "=== EC2 Windows test complete ==="
