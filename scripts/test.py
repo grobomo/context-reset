@@ -387,14 +387,16 @@ with tempfile.TemporaryDirectory() as d:
         test("writes prompt to file", os.path.exists(prompt_file))
         test("prompt file contains prompt", open(prompt_file, encoding='utf-8').read() == "test prompt")
         test("uses EncodedCommand", "-EncodedCommand" in cmd)
-        # Test semicolons in prompt don't reach WT command line
+        # Test semicolons in prompt don't reach WT command line (only our chaining `;` is present)
         cmd_semi = context_reset.build_launch_cmd(d, "return null; next", "title", "#000000")
-        test("semicolons not in WT args", not any(";" in c for c in cmd_semi))
+        # The only `;` should be the focus-tab chain separator, not from the prompt
+        semi_indices = [i for i, c in enumerate(cmd_semi) if c == ";"]
+        test("prompt semicolons not in WT args", len(semi_indices) == 1)
         # Test title sanitization (quotes stripped)
         cmd3 = context_reset.build_launch_cmd(d, "p", 'title "with" quotes', "#000000")
         test("strips quotes from title", 'title with quotes' in cmd3 and not any('"with"' in c for c in cmd3))
         test("allows Claude status icon (no suppressApplicationTitle)", "--suppressApplicationTitle" not in cmd_str)
-        test("no focus-tab chaining (not needed)", ";" not in cmd and "focus-tab" not in cmd)
+        test("focus-tab chained atomically", ";" in cmd and "focus-tab" in cmd and "--previous" in cmd)
     elif context_reset.IS_MAC:
         test("contains osascript", "osascript" in cmd)
         test("contains prompt", "test prompt" in cmd)
