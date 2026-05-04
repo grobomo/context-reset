@@ -397,6 +397,12 @@ with tempfile.TemporaryDirectory() as d:
         test("strips quotes from title", 'title with quotes' in cmd3 and not any('"with"' in c for c in cmd3))
         test("allows Claude status icon (no suppressApplicationTitle)", "--suppressApplicationTitle" not in cmd_str)
         test("focus-tab chained atomically", ";" in cmd and "focus-tab" in cmd and "--previous" in cmd)
+    elif context_reset.IS_WSL:
+        # WSL: cmd is a list, prompt is in a file (not inline)
+        cmd_str_wsl = ' '.join(cmd) if isinstance(cmd, list) else cmd
+        test("WSL native: returns list", isinstance(cmd, list))
+        test("WSL native: has wt.exe", "wt.exe" in cmd)
+        test("WSL native: has claude in bash cmd", "claude" in cmd_str_wsl)
     elif context_reset.IS_MAC:
         test("contains osascript", "osascript" in cmd)
         test("contains prompt", "test prompt" in cmd)
