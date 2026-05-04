@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 archive/
 SESSION_STATE.md
+.claude-next-prompt
 .test-results/
 .workflow-state.json
 specs/

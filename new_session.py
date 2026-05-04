@@ -21,6 +21,7 @@ Audit log: ~/.claude/context-reset/YYYY-MM-DD.log (rotated daily)
 """
 
 import argparse
+import base64
 import csv
 import ctypes
 import io
@@ -806,12 +807,27 @@ def build_launch_cmd(project_dir, prompt, tab_title, tab_color):
     """Build the command to open a new terminal tab with claude.
 
     On Windows: returns a list (for shell=False) to avoid cmd.exe quote
-    mangling that can spawn phantom tabs.
+    mangling that can spawn phantom tabs. Prompt is written to a temp file
+    to avoid WT command-line parsing issues (`;` is WT's command separator
+    and breaks prompts containing code like `return null;`).
     On macOS/Linux: returns a string (for shell=True).
     """
     if IS_WIN:
-        # PowerShell single-quote escaping: double the single quotes
-        ps_escaped = prompt.replace("'", "''")
+        # Write prompt to temp file — avoids WT splitting on `;` in prompt text.
+        # WT uses `;` as command separator GLOBALLY (even after `--`), so any
+        # prompt containing `;` (e.g. `return null;`) breaks the launch.
+        prompt_file = os.path.join(project_dir, '.claude-next-prompt')
+        with open(prompt_file, 'w', encoding='utf-8') as f:
+            f.write(prompt)
+        # Build PS script that reads prompt from file, cleans up, launches claude.
+        # Use -EncodedCommand (Base64 UTF-16LE) so NO special chars reach WT's parser.
+        ps_prompt_path = prompt_file.replace('/', '\\')
+        ps_script = (
+            f"$p = Get-Content -Raw '{ps_prompt_path}'\n"
+            f"Remove-Item '{ps_prompt_path}' -ErrorAction SilentlyContinue\n"
+            f"claude $p"
+        )
+        encoded = base64.b64encode(ps_script.encode('utf-16-le')).decode('ascii')
         # Also sanitize tab title (could contain quotes from TODO.md)
         safe_title = tab_title.replace('"', '').replace("'", "")
         # Return a list — avoids shell=True and cmd.exe quote mangling.
@@ -822,8 +838,7 @@ def build_launch_cmd(project_dir, prompt, tab_title, tab_color):
             '--tabColor', tab_color,
             '--startingDirectory', project_dir,
             '--',
-            'powershell', '-NoExit', '-Command',
-            f"claude '{ps_escaped}'",
+            'powershell', '-NoExit', '-EncodedCommand', encoded,
         ]
     elif IS_MAC:
         escaped = prompt.replace("'", "'\\''")

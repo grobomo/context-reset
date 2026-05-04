@@ -382,10 +382,14 @@ with tempfile.TemporaryDirectory() as d:
         test("contains tab title", "my title" in cmd)
         test("contains tab color", "#2D5F2D" in cmd)
         test("contains project dir", d in cmd)
-        test("contains prompt", any("test prompt" in c for c in cmd))
-        # Test single-quote escaping in prompt
-        cmd2 = context_reset.build_launch_cmd(d, "it's a test", "title", "#000000")
-        test("escapes single quotes for PowerShell", any("it''s a test" in c for c in cmd2))
+        # Prompt is written to file, not embedded in command (avoids WT `;` splitting)
+        prompt_file = os.path.join(d, '.claude-next-prompt')
+        test("writes prompt to file", os.path.exists(prompt_file))
+        test("prompt file contains prompt", open(prompt_file, encoding='utf-8').read() == "test prompt")
+        test("uses EncodedCommand", "-EncodedCommand" in cmd)
+        # Test semicolons in prompt don't reach WT command line
+        cmd_semi = context_reset.build_launch_cmd(d, "return null; next", "title", "#000000")
+        test("semicolons not in WT args", not any(";" in c for c in cmd_semi))
         # Test title sanitization (quotes stripped)
         cmd3 = context_reset.build_launch_cmd(d, "p", 'title "with" quotes', "#000000")
         test("strips quotes from title", 'title with quotes' in cmd3 and not any('"with"' in c for c in cmd3))
