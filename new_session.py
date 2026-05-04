@@ -962,23 +962,34 @@ def _save_foreground_window():
 def _restore_foreground_window(hwnd):
     """Restore OS-level focus to a previously saved window handle.
 
-    Uses the Alt-key trick: Windows blocks SetForegroundWindow unless
-    the calling thread owns the foreground lock. Sending a synthetic
-    Alt key release satisfies that requirement.
+    WT's async tab creation can steal focus up to 3s after launch.
+    Spawns a daemon thread that monitors for 5s, restoring focus
+    whenever it detects a steal. The main thread returns immediately.
     """
     if not IS_WIN or not hwnd:
         return
-    try:
-        import ctypes
-        # Alt-key trick to satisfy SetForegroundWindow's foreground-lock rule
-        ctypes.windll.user32.keybd_event(0x12, 0, 0x0002, 0)  # VK_MENU up
-        result = ctypes.windll.user32.SetForegroundWindow(hwnd)
-        if result:
-            log("Restored OS-level foreground window")
-        else:
-            log("WARNING: SetForegroundWindow returned 0 (may need retry)")
-    except Exception as e:
-        log(f"WARNING: could not restore foreground window: {e}")
+    import threading
+
+    def _monitor():
+        try:
+            import ctypes
+            restores = 0
+            for _ in range(25):  # 25 * 0.2s = 5s
+                current = ctypes.windll.user32.GetForegroundWindow()
+                if current != hwnd:
+                    ctypes.windll.user32.keybd_event(0x12, 0, 0x0002, 0)
+                    ctypes.windll.user32.SetForegroundWindow(hwnd)
+                    restores += 1
+                time.sleep(0.2)
+            if restores:
+                log(f"Focus monitor: restored {restores} time(s) over 5s")
+            else:
+                log("Focus monitor: no steal detected")
+        except Exception as e:
+            log(f"WARNING: focus monitor failed: {e}")
+
+    t = threading.Thread(target=_monitor, daemon=True)
+    t.start()
 
 
 def _has_command(name):
@@ -1447,8 +1458,8 @@ def main():
 
     # Restore OS-level focus. wt's focus-tab --previous handles tab focus
     # within WT, but WT itself is now the foreground window. Push it back.
+    # _restore_foreground_window polls for up to 2s, retrying as needed.
     if saved_hwnd:
-        time.sleep(0.3)  # Let WT finish processing new-tab + focus-tab
         _restore_foreground_window(saved_hwnd)
 
     if not close_old:
