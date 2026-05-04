@@ -12,33 +12,22 @@ When a session's context window fills up, `context_reset.py` seamlessly transfer
 ## Quick start
 
 ```bash
-# 1. Install (Python 3.8+, no other dependencies)
+# Install (Python 3.8+, no other dependencies)
 pip install git+https://github.com/grobomo/context-reset
-
 # Works on Windows, WSL, macOS, and Linux.
-# WSL is auto-detected and routes through Windows Terminal.
-
-# 2. Add a stop hook to ~/.claude/settings.json
 ```
 
-Add this to your Claude Code settings (`~/.claude/settings.json`):
+Then tell Claude how to use it. Add to your project's `CLAUDE.md`:
 
-```json
-{
-  "hooks": {
-    "Stop": [
-      {
-        "type": "command",
-        "command": "context-reset --project-dir $CLAUDE_PROJECT_DIR"
-      }
-    ]
-  }
-}
+```markdown
+## Context Reset
+When context gets long, save your progress to TODO.md and run:
+  context-reset --project-dir $CLAUDE_PROJECT_DIR
 ```
 
-That's it. Claude will automatically reset to a fresh session when context gets heavy, carrying over TODO.md and a readable summary of the conversation.
+This gives Claude a manual reset button. For **fully autonomous** operation (Claude loops through tasks and resets itself when context fills up), see [Integration with Claude Code hooks](#integration-with-claude-code-hooks) below.
 
-If you already have stop hooks, just add the entry to your existing `Stop` array.
+> **Why not a Stop hook?** You might think to wire `context-reset` as a Stop hook, but that's wrong — Stop hooks fire on *every* stop (not just context-full), `context-reset` outputs no `{decision: "block"}` JSON, and it blocks for 15-45s during verification. The correct architecture uses a separate auto-continue hook that blocks stops and tells Claude to keep working. Claude then calls `context-reset` itself when it decides context is full.
 
 ## How it works
 
@@ -99,45 +88,124 @@ Each new tab gets:
 
 ## Integration with Claude Code hooks
 
-Add to a [stop hook](https://docs.anthropic.com/en/docs/claude-code/hooks) in `~/.claude/settings.json` to let Claude trigger resets autonomously when context gets heavy:
+The auto-continue loop is what makes context-reset powerful — Claude works through a task list autonomously and resets itself when context fills up. There are two ways to set this up.
+
+### Option A: With hook-runner (recommended)
+
+[hook-runner](https://github.com/grobomo/hook-runner) is a modular hook system for Claude Code. It manages all your hooks as `.js` files in folders — no manual `settings.json` editing. context-reset's auto-continue module ships with hook-runner.
+
+```bash
+# 1. Install hook-runner (enables starter workflow with safe defaults)
+npx grobomo/hook-runner --yes
+
+# 2. Install context-reset
+pip install git+https://github.com/grobomo/context-reset
+```
+
+hook-runner's `starter` workflow includes the `auto-continue.js` Stop module, which:
+- Blocks every stop with `{decision: "block"}`
+- Reads `stop-message.txt` and feeds it to Claude as the block reason
+- Claude sees "DO NOT STOP. Check TODO.md, do the next one."
+- When context fills up, Claude runs `context-reset` itself
+
+The message file (`modules/Stop/stop-message.txt`) is separate from the code so you can customize what Claude does on each stop without touching JavaScript:
+
+```
+DO NOT STOP. DO NOT SUMMARIZE. DO NOT LIST OPTIONS. Follow this order:
+
+1) Check TODO.md — if tasks remain, do the next one NOW.
+2) Scan logs for incomplete tangents — do them.
+3) TEST what you built.
+4) Organize, optimize, secure the project.
+5) Zoom out: what real-world value comes next? Write tasks, then EXECUTE.
+
+If context is getting long, save state to TODO.md, then run context-reset:
+  context-reset --project-dir $CLAUDE_PROJECT_DIR
+```
+
+**Why hook-runner?** Beyond auto-continue, hook-runner gives you 48+ modules in the `starter` workflow: force-push protection, destructive git guards, secret scanning, commit quality checks, and session logging. The `shtd` workflow adds 113 modules for full spec-first development discipline. All modules are plain `.js` files you can read, edit, or disable individually.
+
+### Option B: Standalone (no hook-runner)
+
+If you prefer not to install hook-runner, create a minimal Stop hook with a separate message file.
+
+**1. Create the message file** at `~/.claude/stop-message.txt`:
+
+```
+DO NOT STOP. Check TODO.md for pending tasks and do the next one.
+If context is getting long, save state to TODO.md, then run:
+  context-reset --project-dir $CLAUDE_PROJECT_DIR
+```
+
+**2. Create the hook script** at `~/.claude/hooks/auto-continue.js`:
+
+```javascript
+"use strict";
+var fs = require("fs");
+var path = require("path");
+
+module.exports = function() {
+  var msgPath = path.join(
+    process.env.HOME || process.env.USERPROFILE || "",
+    ".claude", "stop-message.txt"
+  );
+  var message;
+  try {
+    message = fs.readFileSync(msgPath, "utf-8").trim();
+  } catch (e) {
+    message = "DO NOT STOP. Check TODO.md for pending tasks and do the next one.";
+  }
+  return { decision: "block", reason: message };
+};
+```
+
+**3. Wire it in** `~/.claude/settings.json`:
 
 ```json
 {
   "hooks": {
     "Stop": [
       {
-        "type": "command",
-        "command": "context-reset --project-dir $CLAUDE_PROJECT_DIR"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ~/.claude/hooks/auto-continue.js",
+            "timeout": 5
+          }
+        ]
       }
     ]
   }
 }
 ```
 
-The script reads `$CLAUDE_PROJECT_DIR` by default, so from a hook you can simply use `context-reset`.
+> **Key design choice:** The message text is always in a separate file, never hardcoded in the hook script. This lets you iterate on the prompt without touching code, and prevents accidental changes when editing JavaScript. The message file is a user-authored artifact — treat it like a prompt template.
 
-If you prefer to run from source instead of pip install:
+### The auto-continue loop
+
+With either option, the full autonomous loop works like this:
 
 ```
-python /path/to/context-reset/context_reset.py --project-dir $CLAUDE_PROJECT_DIR
+┌─────────────────────────────────────────────────────────┐
+│  1. Claude works on TODO.md tasks                       │
+│  2. Claude tries to stop                                │
+│  3. Stop hook blocks: "DO NOT STOP. Do the next task."  │
+│  4. Claude continues working                            │
+│  5. Context fills up                                    │
+│  6. Claude saves state to TODO.md                       │
+│  7. Claude runs: context-reset --project-dir $DIR       │
+│  8. context-reset saves SESSION_STATE.md                │
+│  9. context-reset opens fresh tab with new Claude       │
+│ 10. New session reads SESSION_STATE.md + TODO.md        │
+│ 11. Back to step 1                                      │
+└─────────────────────────────────────────────────────────┘
 ```
 
-### The full auto-continue loop
-
-The real power is combining `new_session.py` with hook-runner's `auto-continue.js` stop module. The flow:
-
-1. Claude Code finishes a task (or tries to stop)
-2. **auto-continue.js** fires as a stop hook → returns `{decision: "block"}` with the text from `stop-message.txt`
-3. `stop-message.txt` tells Claude: "DO NOT STOP. Check TODO.md, do the next task."
-4. Claude keeps working through TODO.md tasks in a loop
-5. When context gets long, Claude saves state to TODO.md and runs `context_reset.py` itself
-6. A fresh session picks up where it left off via SESSION_STATE.md + TODO.md
-
-This creates a fully autonomous coding agent that works through a task list without human intervention.
+This creates a fully autonomous coding agent that works through a task list across unlimited context windows, with no human intervention.
 
 ### Calling from external systems (scripts, cron)
 
-When launching Claude Code from outside a terminal (e.g. from an AI agent, cron job, or automation script):
+Launch a Claude session from outside a terminal:
 
 ```bash
 python3 new_session.py \
@@ -146,10 +214,9 @@ python3 new_session.py \
 ```
 
 **Important:**
-- **No permission flags needed.** Don't add `--dangerously-skip-permissions`, `--permission-mode`, or `--print`. The script launches plain `claude` and the workspace is pre-trusted automatically via `~/.claude.json`.
-- **`--print` mode breaks the loop.** It runs one-shot and exits, bypassing the stop-hook/auto-continue system. Claude can't loop through TODO.md tasks.
-- `new_session.py` preserves the old tab by default (no flag needed). Use `context_reset.py` or `--close-old-tab` to kill it.
-- The launched Claude session is fully autonomous — auto-continue handles task looping, context-reset handles fresh starts.
+- **No permission flags needed.** The script launches plain `claude` and pre-trusts the workspace automatically via `~/.claude.json`.
+- **Don't use `--print` mode.** It runs one-shot and exits, bypassing the stop-hook/auto-continue loop.
+- `new_session.py` preserves the old tab by default. Use `context_reset.py` or `--close-old-tab` to kill it.
 
 ## Session continuity
 
