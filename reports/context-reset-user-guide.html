@@ -61,7 +61,7 @@
 <div class="header">
   <h1>context-reset v1.1.0</h1>
   <div class="subtitle">Cross-Platform Session Management for Claude Code &mdash; User Guide</div>
-  <div class="meta">Generated 2026-05-04 | 184 tests passing across 4 platforms</div>
+  <div class="meta">Generated 2026-05-04 | 197 tests passing across 4 platforms</div>
 </div>
 
 <div class="container">
@@ -87,7 +87,7 @@
   <tr><td>Two scripts</td><td><code>context_reset.py</code> (kills old tab) and <code>new_session.py</code> (keeps old tab)</td></tr>
   <tr><td>State handoff</td><td>SESSION_STATE.md (auto) + TODO.md (manual)</td></tr>
   <tr><td>Tab UX</td><td>Per-project colors, folder name titles, no focus steal</td></tr>
-  <tr><td>Safety</td><td>Two-phase verification, multi-Claude guard, audit logging</td></tr>
+  <tr><td>Safety</td><td>Two-phase verification, multi-Claude guard, duplicate session guard, kill retry, audit logging</td></tr>
   <tr><td>Dependencies</td><td>Python 3.8+ stdlib only. No pip dependencies.</td></tr>
 </table>
 
@@ -327,9 +327,10 @@ new-session --dry-run       # same, keeps old tab</pre>
   <tr><td>Trust dialog on new tab</td><td>Script pre-trusts via <code>~/.claude.json</code>. Check file is writable.</td></tr>
   <tr><td>Tab doesn't open (Windows)</td><td>Verify <code>wt --version</code> works from terminal.</td></tr>
   <tr><td>Tab doesn't open (WSL)</td><td>WSL interop must be enabled. Check <code>wt.exe --version</code> from WSL.</td></tr>
-  <tr><td>Focus steal</td><td>Fixed in v1.1.0: atomic <code>focus-tab --previous</code> chaining.</td></tr>
+  <tr><td>Focus steal</td><td>Fixed: <code>focus-tab --previous</code> (WT tab) + Win32 <code>GetForegroundWindow</code>/<code>SetForegroundWindow</code> (OS window).</td></tr>
   <tr><td>Semicolons break launch</td><td>Fixed in v1.1.0: prompt-file approach on all platforms.</td></tr>
-  <tr><td>Old tab not killed</td><td>Run <code>--dry-run</code> to see if shell PID is detected.</td></tr>
+  <tr><td>Old tab not killed</td><td>Fixed: taskkill now captures stderr, retries once, verifies PID death. Run <code>--dry-run</code> to check PID detection.</td></tr>
+  <tr><td>Duplicate tabs</td><td>Fixed: pre-launch guard checks if target project has an active transcript (&lt;10s old). Refuses to spawn duplicates.</td></tr>
 </table>
 
 </div>
