@@ -204,13 +204,13 @@
     <td>#47</td>
   </tr>
   <tr>
-    <td>macOS</td>
-    <td>&mdash;</td>
-    <td>&mdash;</td>
+    <td>macOS (Darwin arm64)</td>
+    <td>Darwin 24.6.0</td>
+    <td>3.9.6</td>
     <td>Terminal.app</td>
-    <td>8 mock</td>
-    <td><span class="badge-mock">MOCK</span></td>
-    <td>#50</td>
+    <td>140/140</td>
+    <td><span class="badge-pass">EC2</span></td>
+    <td>#58</td>
   </tr>
   <tr>
     <td>Linux (tmux)</td>
@@ -437,8 +437,12 @@ Python 3.10.12
 <span class="info">[context-reset] Process chain:</span> python3 &gt; bash &gt; sshd &gt; sshd &gt; sshd &gt; systemd
 </div>
 
-<h2 id="macos">8. macOS Evidence (Mock)</h2>
-<div class="terminal" data-title="Mock tests run on all platforms | PR #50">
+<h2 id="macos">8. macOS Evidence (EC2 mac2.metal)</h2>
+<div class="terminal" data-title="Darwin arm64 | Python 3.9.6 | mac-ztsa-test mac2.metal | PR #58">
+<span class="info">Darwin ip-172-31-35-58.us-east-2.compute.internal 24.6.0</span>
+<span class="info">Darwin Kernel Version 24.6.0 root:xnu-11417.140.69.705.2~1/RELEASE_ARM64_T8103 arm64</span>
+<span class="info">Python 3.9.6</span>
+
 <span class="header-line">=== macOS support ===</span>
   <span class="pass">PASS: macOS returns string</span>
   <span class="pass">PASS: macOS uses osascript</span>
@@ -449,9 +453,20 @@ Python 3.10.12
   <span class="pass">PASS: macOS has claude in cmd</span>
   <span class="pass">PASS: macOS prompt semicolons safe</span>
 
-<span class="warn">Note: Live EC2 test on mac2.metal deferred due to cost ($6.80/hr).</span>
-<span class="warn">The osascript command is fully constructed and validated; only live</span>
-<span class="warn">Terminal.app interaction remains unverified.</span>
+<span class="header-line">=== build_launch_cmd (native macOS) ===</span>
+  <span class="pass">PASS: contains osascript</span>
+  <span class="pass">PASS: prompt file written</span>
+  <span class="pass">PASS: prompt file contains prompt</span>
+
+<span class="header-line">=== dry-run (native macOS) ===</span>
+<span class="info">[context-reset] Platform: darwin</span>
+<span class="info">[context-reset] DRY RUN - command: osascript -e 'tell application "Terminal"</span>
+<span class="info">  to do script "p=$(cat \"/tmp/context-reset-test/.claude-next-prompt\");</span>
+<span class="info">  rm -f \"/tmp/context-reset-test/.claude-next-prompt\";</span>
+<span class="info">  printf \"\\033]0;context-reset-test\\007\";</span>
+<span class="info">  cd \"/tmp/context-reset-test\" &amp;&amp; claude \"$p\""'</span>
+
+<span class="header-line">Results: 140 passed, 0 failed</span>
 </div>
 
 <h2 id="linux">9. Linux tmux/bare Evidence (Mock)</h2>
