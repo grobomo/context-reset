@@ -4,15 +4,23 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "claude-context-reset"
-version = "1.0.0"
-description = "Launch new Claude Code sessions with automatic state handoff"
+version = "1.1.0"
+description = "Launch new Claude Code sessions with automatic state handoff. Cross-platform: Windows, WSL, macOS, Linux."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.8"
+keywords = ["claude", "claude-code", "session", "context", "terminal"]
+classifiers = [
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Environment :: Console",
+]
 
 [project.scripts]
 new-session = "new_session:main"
-context-reset = "new_session:main"
+context-reset = "new_session:main_context_reset"
 
 [tool.setuptools]
 py-modules = ["new_session", "context_reset", "task_claims"]

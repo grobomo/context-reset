@@ -1428,5 +1428,11 @@ def main():
     release_lock(lock_fh, lock_file)
 
 
+def main_context_reset():
+    """Entry point for `context-reset` CLI — always closes the old tab."""
+    sys.argv.insert(1, '--close-old-tab')
+    main()
+
+
 if __name__ == "__main__":
     main()
