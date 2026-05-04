@@ -937,6 +937,30 @@ def kill_old_tab(shell_pid, close_tab=False):
         _kill_old_tab_unix(shell_pid)
 
 
+def get_wt_settings_path():
+    """Return the path to Windows Terminal's settings.json."""
+    local_app_data = os.environ.get("LOCALAPPDATA", "")
+    return os.path.join(
+        local_app_data,
+        "Packages", "Microsoft.WindowsTerminal_8wekyb3d8bbwe",
+        "LocalState", "settings.json"
+    )
+
+
+def set_wt_close_on_exit(value):
+    """Set closeOnExit in WT settings (always/graceful/never)."""
+    settings_path = get_wt_settings_path()
+    try:
+        with open(settings_path, 'r', encoding='utf-8') as f:
+            settings = json.load(f)
+        settings.setdefault("profiles", {}).setdefault("defaults", {})["closeOnExit"] = value
+        with open(settings_path, 'w', encoding='utf-8') as f:
+            json.dump(settings, f, indent=4, ensure_ascii=False)
+        log(f"closeOnExit -> {value}")
+    except Exception as e:
+        log(f"WARNING: failed to set closeOnExit={value}: {e}")
+
+
 def _kill_old_tab_windows(shell_pid, close_tab):
     log("=== Context reset complete ===")
 
