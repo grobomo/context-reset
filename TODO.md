@@ -270,6 +270,33 @@ The Quick Start hook config is wrong — `context-reset` as a Stop hook fires on
 - [x] T006: Update user guide HTML report — new Quick Start with CLAUDE.md + hook-runner recommendation (PR #62)
 - [x] T007: Update admin reference HTML report — new Integration section with loop diagram, file table, common-mistake warning (PR #62)
 
+## Fix Focus Steal and Tab Multiplication (033)
+
+Two critical bugs making the project non-functional:
+
+### Focus steal: wt new-tab activates the WT window at the OS level
+`focus-tab --previous` only switches tabs within WT, it does NOT push WT behind whatever app the user was in. Every context reset yanks focus away from the user's current work.
+
+- [x] T001: Add Win32 save/restore foreground window — `GetForegroundWindow()` before launch, `SetForegroundWindow()` after, via ctypes. Alt-key trick for foreground lock. (PR #63)
+- [x] T002: Add test for `_save_foreground_window` / `_restore_foreground_window` on Windows (PR #63)
+
+### Tab multiplication: taskkill failing silently (exit codes 128/255)
+Each context reset opens a new tab but fails to kill the old one. After N failed kills = N+1 tabs alive. Logs show taskkill exit codes 128 and 255 (failures) with no retry or escalation.
+
+- [x] T003: Diagnose WHY taskkill fails — capture stderr from taskkill (was DEVNULL), log actual error. (PR #63)
+- [x] T004: Add retry/escalation for failed kills — retry once, verify PID death via os.kill(pid, 0). (PR #63)
+- [x] T005: Add pre-launch guard — check newest transcript age (<10s = active session). Refuse to spawn duplicates. (PR #64)
+- [x] T006: Add detection/alerting — logs "DUPLICATE GUARD" + "SKIPPED" warning, releases lock, returns without launching. (PR #64)
+
+## Session 2026-05-04g handoff
+
+All 033 tasks done (PRs #63, #64). Three fixes for two critical bugs:
+1. **Focus steal fixed**: Win32 GetForegroundWindow/SetForegroundWindow saves and restores OS-level focus around wt new-tab. Alt-key trick for foreground lock.
+2. **Kill failures fixed**: taskkill now captures stderr, retries once, verifies PID death via os.kill(0). No more silent failures.
+3. **Duplicate guard**: Pre-launch check — if target project's transcript was written <10s ago, refuses to spawn. Prevents zombie tab accumulation.
+
+162/162 tests. All 7 CI jobs green on both PRs.
+
 ## Session 2026-05-04f handoff
 
 PR #62 merged — fixed broken Quick Start and integration docs:
