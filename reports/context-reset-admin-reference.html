@@ -65,6 +65,7 @@
   <h3>Table of Contents</h3>
   <ol>
     <li><a href="#arch">Architecture</a></li>
+    <li><a href="#integration">Integration: Auto-Continue Loop</a></li>
     <li><a href="#internals">Key Internals</a></li>
     <li><a href="#platform-matrix">Platform Verification Matrix</a></li>
     <li><a href="#win11">Windows 11 Evidence</a></li>
@@ -116,6 +117,56 @@
             [if close_old_tab]
               find_shell_pid() ──&gt; kill_old_tab()
 </div>
+
+<!-- ====== 1b. Integration ====== -->
+<h2 id="integration">1b. Integration: The Auto-Continue Loop</h2>
+
+<p>context-reset is <strong>not</strong> a Stop hook. It's a tool that Claude calls when it decides context is full. The auto-continue loop is what drives autonomous operation:</p>
+
+<div class="arch-diagram">
+  ┌─ Claude Code Session ──────────────────────────────────────┐
+  │                                                            │
+  │  1. Claude works on TODO.md tasks                          │
+  │  2. Claude tries to stop                                   │
+  │  3. Stop hook (auto-continue.js):                          │
+  │     → reads stop-message.txt                               │
+  │     → returns {decision: "block", reason: message}         │
+  │  4. Claude sees: "DO NOT STOP. Do the next task."          │
+  │  5. Claude continues working                               │
+  │  6. Context fills up                                       │
+  │  7. Claude saves state to TODO.md                          │
+  │  8. Claude runs: context-reset --project-dir $DIR          │
+  │     → saves SESSION_STATE.md (conversation summary)        │
+  │     → opens fresh tab with new Claude process              │
+  │     → verifies new session is working                      │
+  │     → kills old tab                                        │
+  │  9. New session reads SESSION_STATE.md + TODO.md           │
+  │ 10. Back to step 1 (infinite loop)                         │
+  └────────────────────────────────────────────────────────────┘
+</div>
+
+<h3>Recommended: hook-runner</h3>
+<p><a href="https://github.com/grobomo/hook-runner">hook-runner</a> is a modular hook system that manages all Claude Code hooks as <code>.js</code> files in folders. The <code>auto-continue.js</code> module ships with hook-runner's <code>starter</code> workflow (48 modules including git safety, secret scanning, commit quality).</p>
+
+<pre>npx grobomo/hook-runner --yes        # install with starter workflow
+pip install git+https://github.com/grobomo/context-reset</pre>
+
+<h4>Key files</h4>
+<table>
+  <tr><th>File</th><th>Purpose</th></tr>
+  <tr><td><code>modules/Stop/auto-continue.js</code></td><td>Blocks every stop, reads message from <code>stop-message.txt</code>, returns <code>{decision: "block"}</code></td></tr>
+  <tr><td><code>modules/Stop/stop-message.txt</code></td><td>User-authored prompt — tells Claude what to do instead of stopping. Separate file so prompt iteration doesn't touch code.</td></tr>
+  <tr><td><code>run-stop.js</code></td><td>Runner that loads all <code>modules/Stop/*.js</code> modules</td></tr>
+  <tr><td><code>run-hidden.js</code></td><td>Windows wrapper — runs hooks with hidden console window to prevent focus steal</td></tr>
+</table>
+
+<h4>Why separate the message file?</h4>
+<p>The stop message is a <strong>user-authored prompt artifact</strong>, iterated over 15+ versions. Keeping it in a separate <code>.txt</code> file means: (1) prompt iteration doesn't risk breaking JavaScript, (2) Claude can't accidentally rewrite it during code changes, (3) it's easy to customize per-team or per-project.</p>
+
+<h3>Standalone alternative</h3>
+<p>Users who prefer not to install hook-runner can create a minimal <code>auto-continue.js</code> that reads a separate message file and returns <code>{decision: "block"}</code>. See the README for the complete standalone setup.</p>
+
+<div class="note"><strong>Common mistake:</strong> Do NOT wire <code>context-reset</code> as a Stop hook directly. Stop hooks fire on every stop (not just context-full), <code>context-reset</code> outputs no <code>{decision: "block"}</code> JSON, and it blocks for 15-45s during verification. The correct pattern is: auto-continue blocks stops → Claude works → Claude calls context-reset when needed.</div>
 
 <!-- ====== 2. Internals ====== -->
 <h2 id="internals">2. Key Internals</h2>

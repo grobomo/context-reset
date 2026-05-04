@@ -100,22 +100,17 @@
 </div>
 
 <div class="step">
-  <p><span class="step-number">2</span> <strong>Add stop hook</strong> to <code>~/.claude/settings.json</code></p>
-  <pre>{
-  "hooks": {
-    "Stop": [
-      {
-        "type": "command",
-        "command": "context-reset --project-dir $CLAUDE_PROJECT_DIR"
-      }
-    ]
-  }
-}</pre>
+  <p><span class="step-number">2</span> <strong>Tell Claude about it</strong> — add to your project's <code>CLAUDE.md</code>:</p>
+  <pre>## Context Reset
+When context gets long, save your progress to TODO.md and run:
+  context-reset --project-dir $CLAUDE_PROJECT_DIR</pre>
 </div>
 
 <div class="step">
-  <p><span class="step-number">3</span> <strong>Done.</strong> Claude will auto-reset when context gets heavy, carrying over TODO.md and a readable conversation summary.</p>
+  <p><span class="step-number">3</span> <strong>Done.</strong> Claude will run context-reset when context fills up, carrying over TODO.md and a readable conversation summary.</p>
 </div>
+
+<div class="note"><strong>For fully autonomous operation</strong> (Claude loops through tasks endlessly), install <a href="https://github.com/grobomo/hook-runner">hook-runner</a>: <code>npx grobomo/hook-runner --yes</code>. Its <code>auto-continue</code> Stop module blocks every stop and tells Claude to keep working. When context fills up, Claude calls context-reset itself. See the <strong>Integration</strong> section in the Admin Reference for the full architecture.</div>
 
 <div class="note">Works on Windows, WSL, macOS, and Linux with no extra configuration. WSL is auto-detected and routes through Windows Terminal.</div>
 
