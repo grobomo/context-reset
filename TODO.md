@@ -255,9 +255,8 @@ Goal: share this system with others who aren't on Windows Terminal.
 
 ## Cleanup (031)
 
-- [ ] T001: Remove stale worktree directories (.claude/worktrees/) and old local branches from merged PRs
-- [ ] T002: Remove stale `scripts/ec2-test-windows.sh` (superseded by unified `scripts/ec2-test.sh`)
-- [ ] T003: Clean up old local branches from merged PRs
+- [ ] T001: Archive stale worktree directories and rename stale ec2-test-windows.sh
+- [ ] T002: Clean up old local branches from merged PRs
 
 ## Session 2026-05-04d handoff
 
