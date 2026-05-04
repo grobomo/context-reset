@@ -204,8 +204,7 @@ context_reset.py          # Same-project reset (always closes old tab)
 task_claims.py            # Multi-tab task negotiation with OS-level file locks
 scripts/test.py           # Tests (149 tests)
 scripts/test_task_claims.py  # Tests for task_claims (35 tests)
-scripts/ec2-test.sh       # Cross-platform EC2 test runner
-scripts/ec2-test-windows.sh  # Windows-specific EC2 test runner
+scripts/ec2-test.sh       # Cross-platform EC2 test runner (ubuntu/windows/macos)
 ~/.claude/context-reset/  # Runtime data (logs, color map)
 SESSION_STATE.md          # Auto-generated in target project (gitignored)
 ```
