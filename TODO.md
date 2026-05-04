@@ -262,13 +262,13 @@ Goal: share this system with others who aren't on Windows Terminal.
 
 The Quick Start hook config is wrong — `context-reset` as a Stop hook fires on EVERY stop (not just context-full), outputs no `{decision: "block"}` JSON, and blocks for 15-45s. The real flow is: auto-continue blocks stops, Claude calls context-reset itself when context is full.
 
-- [ ] T001: Research current hook-runner auto-continue setup — modules, stop-message.txt, gates, logging
-- [ ] T002: Research hook-flow-bundle/config-export skill for automated config sharing
-- [ ] T003: Fix README Quick Start — replace broken Stop hook with CLAUDE.md instruction + hook-runner recommended setup
-- [ ] T004: Add hook-runner integration section to README — full auto-continue loop setup with all required modules/gates
-- [ ] T005: Add lightweight alternative for users without hook-runner — simple Stop hook that outputs `{decision: "block"}` with separate message file
-- [ ] T006: Update user guide HTML report with corrected integration instructions
-- [ ] T007: Update admin reference HTML report with corrected integration instructions and architecture diagram
+- [x] T001: Research current hook-runner auto-continue setup — modules, stop-message.txt, gates, logging (PR #62)
+- [x] T002: Research hook-flow-bundle/config-export skill — exists at ~/.claude/skills/hook-flow-bundle/ (PR #62)
+- [x] T003: Fix README Quick Start — replaced broken Stop hook with CLAUDE.md instruction + hook-runner Option A / standalone Option B (PR #62)
+- [x] T004: Add hook-runner integration section to README — full auto-continue loop with ASCII diagram (PR #62)
+- [x] T005: Add lightweight alternative — standalone auto-continue.js + separate message file (PR #62)
+- [x] T006: Update user guide HTML report — new Quick Start with CLAUDE.md + hook-runner recommendation (PR #62)
+- [x] T007: Update admin reference HTML report — new Integration section with loop diagram, file table, common-mistake warning (PR #62)
 
 ## Session 2026-05-04e handoff
 
