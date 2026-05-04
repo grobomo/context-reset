@@ -142,14 +142,13 @@ When launching Claude Code from outside a terminal (e.g. from an AI agent, cron 
 ```bash
 python3 new_session.py \
   --project-dir /path/to/project \
-  --prompt "Your task description here" \
-  --no-close
+  --prompt "Your task description here"
 ```
 
 **Important:**
 - **No permission flags needed.** Don't add `--dangerously-skip-permissions`, `--permission-mode`, or `--print`. The script launches plain `claude` and the workspace is pre-trusted automatically via `~/.claude.json`.
 - **`--print` mode breaks the loop.** It runs one-shot and exits, bypassing the stop-hook/auto-continue system. Claude can't loop through TODO.md tasks.
-- Use `--no-close` when the caller doesn't have a tab to close (headless, agent-spawned, etc.).
+- `new_session.py` preserves the old tab by default (no flag needed). Use `context_reset.py` or `--close-old-tab` to kill it.
 - The launched Claude session is fully autonomous — auto-continue handles task looping, context-reset handles fresh starts.
 
 ## Session continuity
@@ -194,7 +193,7 @@ scripts/ec2-test.sh ubuntu       # Run tests on Ubuntu EC2
 scripts/ec2-test-windows.sh      # Run tests on Windows EC2
 ```
 
-Verified on: Windows 11 (115/115), Windows Server 2022 (115/115), Ubuntu 22.04 (105/105).
+Verified on: Windows 11 (149/149), Windows Server 2022 (115/115), WSL2 Ubuntu (140/140), Ubuntu 22.04 (105/105).
 
 ## Files
 
