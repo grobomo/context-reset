@@ -288,7 +288,7 @@ Each context reset opens a new tab but fails to kill the old one. After N failed
 - [x] T005: Add pre-launch guard — check newest transcript age (<10s = active session). Refuse to spawn duplicates. (PR #64)
 - [x] T006: Add detection/alerting — logs "DUPLICATE GUARD" + "SKIPPED" warning, releases lock, returns without launching. (PR #64)
 
-- [ ] T007: Update HTML reports with 033 fixes — focus restore, kill retry, duplicate guard, updated test counts (162)
+- [x] T007: Update HTML reports with 033 fixes — focus restore, kill retry, duplicate guard, updated test counts (162) (PR #65)
 
 ## Session 2026-05-04g handoff
 
