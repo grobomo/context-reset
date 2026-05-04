@@ -15,6 +15,9 @@ When a session's context window fills up, `context_reset.py` seamlessly transfer
 # 1. Install (Python 3.8+, no other dependencies)
 pip install git+https://github.com/grobomo/context-reset
 
+# Works on Windows, WSL, macOS, and Linux.
+# WSL is auto-detected and routes through Windows Terminal.
+
 # 2. Add a stop hook to ~/.claude/settings.json
 ```
 
@@ -53,9 +56,13 @@ If any step fails, the old tab is preserved. Nothing is lost.
 | Platform | Terminal | Tab launch | Tab color | Tab title | Kill method |
 |----------|----------|-----------|-----------|-----------|-------------|
 | Windows | Windows Terminal | `wt new-tab` | Yes | Yes | `taskkill /F /T` (detached) |
-| macOS | Terminal.app | `osascript` | No | No | `SIGTERM` to process group |
+| WSL | Windows Terminal | `wt.exe new-tab` via WSL interop | Yes | Yes | `SIGTERM` to process group |
+| macOS | Terminal.app | `osascript` | No | Yes | `SIGTERM` to process group |
 | Linux | gnome-terminal | `gnome-terminal --tab` | No | Yes | `SIGTERM` to process group |
-| Linux (fallback) | any | background process | No | No | `SIGTERM` to process group |
+| Linux | tmux | `tmux new-window` | No | Yes | `SIGTERM` to process group |
+| Linux (fallback) | any | background `bash -c &` | No | Yes | `SIGTERM` to process group |
+
+All platforms use the **prompt-file** approach: the prompt is written to `.claude-next-prompt` and read by the new session's shell command. This avoids quote escaping issues across all terminal types.
 
 ## Usage
 
@@ -88,7 +95,7 @@ Each new tab gets:
 
 - **Title**: Set to the project folder name via `wt --title` on tab creation. Claude Code overwrites with its status icon during the session (this is desirable -- shows working/idle state).
 - **Color**: A persistent per-project color from a 10-color palette. All tabs for the same project share the same color. Colors are stored in `~/.claude/context-reset/color-map.json` and auto-rotate through unused slots. This is the primary project identifier.
-- **Focus**: New tabs don't steal focus — a background thread with ALT-key trick retries focus restoration for 3s to outlast WT's async focus steal (Windows).
+- **Focus**: On Windows/WSL, `focus-tab --previous` is chained atomically with `new-tab` in a single `wt` call — no visible tab flash.
 
 ## Integration with Claude Code hooks
 
@@ -169,17 +176,25 @@ The new session reads `SESSION_STATE.md` first (what actually happened), then `T
 
 ## Requirements
 
-- Python 3.8+
+- Python 3.8+ (stdlib only, no pip dependencies)
 - Claude Code CLI (`claude`) in PATH
 - **Windows**: Windows Terminal (ships with Windows 11, available for Windows 10)
-- **macOS**: Terminal.app (default) or iTerm2
-- **Linux**: gnome-terminal recommended; falls back to background process
+- **WSL**: Windows Terminal accessible via `wt.exe` (auto-detected via `/proc/version`)
+- **macOS**: Terminal.app (default)
+- **Linux**: gnome-terminal or tmux recommended; falls back to background `bash -c &`
 
 ## Tests
 
 ```bash
-python scripts/test.py
+python scripts/test.py           # 149 tests (all platforms via mocks)
+python scripts/test_task_claims.py  # 35 tests for task_claims
+
+# Cross-platform EC2 tests
+scripts/ec2-test.sh ubuntu       # Run tests on Ubuntu EC2
+scripts/ec2-test-windows.sh      # Run tests on Windows EC2
 ```
+
+Verified on: Windows 11 (115/115), Windows Server 2022 (115/115), Ubuntu 22.04 (105/105).
 
 ## Files
 
@@ -187,8 +202,10 @@ python scripts/test.py
 new_session.py            # Shared functions + new-session launcher (never closes old tab)
 context_reset.py          # Same-project reset (always closes old tab)
 task_claims.py            # Multi-tab task negotiation with OS-level file locks
-scripts/test.py           # Tests (108 tests)
+scripts/test.py           # Tests (149 tests)
 scripts/test_task_claims.py  # Tests for task_claims (35 tests)
+scripts/ec2-test.sh       # Cross-platform EC2 test runner
+scripts/ec2-test-windows.sh  # Windows-specific EC2 test runner
 ~/.claude/context-reset/  # Runtime data (logs, color map)
 SESSION_STATE.md          # Auto-generated in target project (gitignored)
 ```
