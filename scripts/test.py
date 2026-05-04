@@ -405,10 +405,16 @@ with tempfile.TemporaryDirectory() as d:
         test("WSL native: has claude in bash cmd", "claude" in cmd_str_wsl)
     elif context_reset.IS_MAC:
         test("contains osascript", "osascript" in cmd)
-        test("contains prompt", "test prompt" in cmd)
+        # Prompt is written to file (prompt-file approach), not embedded in command
+        prompt_file_mac = os.path.join(d, '.claude-next-prompt')
+        test("prompt file written", os.path.exists(prompt_file_mac))
+        test("prompt file contains prompt", open(prompt_file_mac, encoding='utf-8').read() == "test prompt")
     else:
         test("contains claude command", "claude" in cmd)
-        test("contains prompt", "test prompt" in cmd)
+        # Prompt is written to file (prompt-file approach), not embedded in command
+        prompt_file_linux = os.path.join(d, '.claude-next-prompt')
+        test("prompt file written", os.path.exists(prompt_file_linux))
+        test("prompt file contains prompt", open(prompt_file_linux, encoding='utf-8').read() == "test prompt")
 
 # --- WSL detection and build_launch_cmd ---
 print("\n=== WSL support ===")

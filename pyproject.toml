@@ -7,7 +7,7 @@ name = "claude-context-reset"
 version = "1.1.0"
 description = "Launch new Claude Code sessions with automatic state handoff. Cross-platform: Windows, WSL, macOS, Linux."
 readme = "README.md"
-license = "MIT"
+license = {text = "MIT"}
 requires-python = ">=3.8"
 keywords = ["claude", "claude-code", "session", "context", "terminal"]
 classifiers = [
