@@ -1,0 +1,54 @@
+
+=== _project_key ===
+  PASS: produces string key
+  PASS: no colons
+
+=== _parse_todo ===
+  PASS: no TODO.md returns empty
+  PASS: finds unchecked tasks
+  PASS: skips checked tasks
+
+=== claim / release ===
+  PASS: claim succeeds
+  PASS: claim output says claimed
+  PASS: duplicate claim fails
+  PASS: shows already claimed
+  PASS: different task claim succeeds
+  PASS: release succeeds
+  PASS: release output
+  PASS: release non-existent fails
+  PASS: re-claim after release succeeds
+
+=== cmd_next ===
+  PASS: no TODO -> next is None
+  PASS: next gets T001
+  PASS: next claims it
+  PASS: same session gets same task
+  PASS: already_mine flag
+  PASS: second session gets T002
+  PASS: third session gets T003
+  PASS: fourth session gets None (all claimed)
+  PASS: reason is all_claimed
+
+=== cmd_status ===
+  PASS: status shows project name
+  PASS: status shows unchecked tasks
+  PASS: status shows T001 claimed
+  PASS: status shows T002 available
+
+=== _is_pid_alive ===
+  PASS: own pid is alive
+  PASS: bogus pid is dead
+
+=== dead session cleanup ===
+  PASS: dead claim auto-released
+  PASS: dead release logged
+
+=== activity log ===
+  PASS: activity log created
+  PASS: activity has claim event
+  PASS: activity has release event
+  PASS: activity entries have timestamps
+
+========================================
+Results: 35 passed, 0 failed

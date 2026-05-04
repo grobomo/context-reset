@@ -1,0 +1,12 @@
+[context-reset] Wrote session state to C:\Users\joelg\Documents\ProjectsCL1\_grobomo\context-reset\SESSION_STATE.md (31923 chars)
+[context-reset] === New session started for context-reset ===
+[context-reset] Project dir (state): C:\Users\joelg\Documents\ProjectsCL1\_grobomo\context-reset
+[context-reset] Platform: win32
+[context-reset] Prompt: Context was reset. Do not ask what to do. Pick up where the last session left of...
+[context-reset] Close old tab: False
+[context-reset] Tab: title='context-reset', color=#4B3621
+[context-reset] DRY RUN - command: ['wt', '-w', '0', 'new-tab', '--title', 'context-reset', '--tabColor', '#4B3621', '--startingDirectory', 'C:\\Users\\joelg\\Documents\\ProjectsCL1\\_grobomo\\context-reset', '--', 'powershell', '-NoExit', '-EncodedCommand', 'JABwACAAPQAgAEcAZQB0AC0AQwBvAG4AdABlAG4AdAAgAC0AUgBhAHcAIAAnAEMAOgBcAFUAcwBlAHIAcwBcAGoAbwBlAGwAZwBcAEQAbwBjAHUAbQBlAG4AdABzAFwAUAByAG8AagBlAGMAdABzAEMATAAxAFwAXwBnAHIAbwBiAG8AbQBvAFwAYwBvAG4AdABlAHgAdAAtAHIAZQBzAGUAdABcAC4AYwBsAGEAdQBkAGUALQBuAGUAeAB0AC0AcAByAG8AbQBwAHQAJwAKAFIAZQBtAG8AdgBlAC0ASQB0AGUAbQAgACcAQwA6AFwAVQBzAGUAcgBzAFwAagBvAGUAbABnAFwARABvAGMAdQBtAGUAbgB0AHMAXABQAHIAbwBqAGUAYwB0AHMAQwBMADEAXABfAGcAcgBvAGIAbwBtAG8AXABjAG8AbgB0AGUAeAB0AC0AcgBlAHMAZQB0AFwALgBjAGwAYQB1AGQAZQAtAG4AZQB4AHQALQBwAHIAbwBtAHAAdAAnACAALQBFAHIAcgBvAHIAQQBjAHQAaQBvAG4AIABTAGkAbABlAG4AdABsAHkAQwBvAG4AdABpAG4AdQBlAAoAYwBsAGEAdQBkAGUAIAAkAHAA', ';', 'focus-tab', '--previous']
+[context-reset]   tab shell: PID 31452 (powershell.exe), parent PID 11488 (windowsterminal.exe)
+[context-reset]   tab shell: PID 31452
+[context-reset] DRY RUN - shell PID to kill: 31452
+[context-reset] === Dry run complete ===

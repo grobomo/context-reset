@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>context-reset v1.1.0 - Admin Reference (L3)</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif; background: #f5f5f5; color: #333; line-height: 1.6; }
+  .header { background: linear-gradient(135deg, #2c3e50 0%, #34495e 50%, #2c3e50 100%); color: white; padding: 40px 60px; }
+  .header h1 { font-size: 2em; font-weight: 300; margin-bottom: 8px; }
+  .header .subtitle { font-size: 1em; opacity: 0.8; }
+  .header .meta { margin-top: 16px; font-size: 0.85em; opacity: 0.6; display: flex; gap: 30px; flex-wrap: wrap; }
+  .header .meta span { display: inline-block; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 30px 60px; }
+  h2 { font-size: 1.5em; color: #2c3e50; margin: 36px 0 14px; border-bottom: 2px solid #e0e0e0; padding-bottom: 8px; }
+  h3 { font-size: 1.15em; color: #444; margin: 20px 0 10px; }
+  h4 { font-size: 1em; color: #555; margin: 16px 0 8px; }
+  p { margin: 6px 0 12px; }
+  .toc { background: white; border-radius: 8px; padding: 20px 24px; margin: 20px 0; box-shadow: 0 1px 4px rgba(0,0,0,0.06); columns: 2; }
+  .toc h3 { margin-top: 0; column-span: all; }
+  .toc ol { margin-left: 20px; break-inside: avoid; }
+  .toc li { margin: 5px 0; font-size: 0.95em; }
+  .toc a { color: #2c3e50; text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 0.92em; }
+  th { background: #ecf0f1; text-align: left; padding: 8px 12px; font-weight: 600; border-bottom: 2px solid #bdc3c7; }
+  td { padding: 8px 12px; border-bottom: 1px solid #eee; vertical-align: top; }
+  tr:hover { background: #fafafa; }
+  .terminal { background: #1e1e1e; color: #d4d4d4; font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace; font-size: 11.5px; padding: 14px; border-radius: 6px; overflow-x: auto; line-height: 1.45; margin: 10px 0; max-height: 400px; overflow-y: auto; position: relative; white-space: pre; }
+  .terminal::before { content: attr(data-title); display: block; background: #333; margin: -14px -14px 10px; padding: 5px 14px; font-size: 10px; color: #888; border-radius: 6px 6px 0 0; white-space: normal; }
+  .terminal .pass { color: #6a9955; }
+  .terminal .info { color: #569cd6; }
+  .terminal .warn { color: #ce9178; }
+  .terminal .header-line { color: #dcdcaa; font-weight: bold; }
+  code { background: #ecf0f1; padding: 1px 5px; border-radius: 3px; font-family: 'Cascadia Code', Consolas, monospace; font-size: 0.88em; }
+  pre { background: #f8f8f8; border: 1px solid #ddd; border-radius: 5px; padding: 12px; overflow-x: auto; font-family: 'Cascadia Code', Consolas, monospace; font-size: 0.82em; line-height: 1.45; margin: 10px 0; }
+  .note { background: #e8f4fd; border-left: 4px solid #3498db; padding: 10px 14px; margin: 14px 0; border-radius: 0 5px 5px 0; font-size: 0.93em; }
+  .warn-box { background: #fef3cd; border-left: 4px solid #f0ad4e; padding: 10px 14px; margin: 14px 0; border-radius: 0 5px 5px 0; font-size: 0.93em; }
+  .section-box { background: white; border-radius: 8px; padding: 18px 22px; margin: 14px 0; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
+  .badge-pass { display: inline-block; background: #27ae60; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.8em; font-weight: 500; }
+  .badge-mock { display: inline-block; background: #3498db; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.8em; font-weight: 500; }
+  .badge-na { display: inline-block; background: #95a5a6; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.8em; font-weight: 500; }
+  .arch-diagram { background: white; border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin: 14px 0; font-family: 'Cascadia Code', Consolas, monospace; font-size: 12px; line-height: 1.6; white-space: pre; overflow-x: auto; }
+  .footer { text-align: center; padding: 24px; color: #999; font-size: 0.82em; border-top: 1px solid #e0e0e0; margin-top: 36px; }
+  @media print { body { background: white; } .container { padding: 10px 20px; } .terminal { max-height: none; } }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>context-reset v1.1.0 &mdash; Admin Reference</h1>
+  <div class="subtitle">L3 Technical Documentation: Architecture, Internals, Cross-Platform Verification</div>
+  <div class="meta">
+    <span>Version: 1.1.0</span>
+    <span>Date: 2026-05-04</span>
+    <span>Tests: 184 (149 core + 35 task_claims)</span>
+    <span>Platforms: 4 verified</span>
+  </div>
+</div>
+
+<div class="container">
+
+<div class="toc">
+  <h3>Table of Contents</h3>
+  <ol>
+    <li><a href="#arch">Architecture</a></li>
+    <li><a href="#internals">Key Internals</a></li>
+    <li><a href="#platform-matrix">Platform Verification Matrix</a></li>
+    <li><a href="#win11">Windows 11 Evidence</a></li>
+    <li><a href="#winserver">Windows Server 2022 Evidence</a></li>
+    <li><a href="#wsl">WSL2 Evidence</a></li>
+    <li><a href="#ubuntu">Ubuntu 22.04 Evidence</a></li>
+    <li><a href="#macos">macOS Evidence</a></li>
+    <li><a href="#linux">Linux tmux/bare Evidence</a></li>
+    <li><a href="#security">Security &amp; Safety</a></li>
+    <li><a href="#files">File Reference</a></li>
+    <li><a href="#config">Configuration Reference</a></li>
+    <li><a href="#ec2-infra">EC2 Test Infrastructure</a></li>
+    <li><a href="#changelog">v1.1.0 Changelog</a></li>
+  </ol>
+</div>
+
+<!-- ====== 1. Architecture ====== -->
+<h2 id="arch">1. Architecture</h2>
+
+<div class="arch-diagram">
+                    context_reset.py                   new_session.py
+                    (--close-old-tab)                   (default: keep)
+                         |                                   |
+                         +----------+  +---------------------+
+                                    |  |
+                              new_session.main()
+                                    |
+               +--------------------+--------------------+
+               |                    |                    |
+        extract_session_context  build_prompt      ensure_workspace_trusted
+        (tail JSONL, parse,     (SESSION_STATE +    (write ~/.claude.json)
+         write SESSION_STATE)    TODO.md refs)
+                                    |
+                             build_launch_cmd()
+                    +-------+-------+-------+-------+
+                    |       |       |       |       |
+                 Windows   WSL    macOS   gnome   tmux/bare
+                 wt.exe   wt.exe  osascript -term  bash -c
+                 +Encoded  +wsl    +prompt  +prompt +prompt
+                 Command   .exe    file     file    file
+                    |       |       |       |       |
+               [prompt-file: .claude-next-prompt]
+                    |
+              Popen(cmd) ──&gt; verify_claude_working()
+                    |              |
+              count_claude    watch transcript
+              processes       file activity
+                    |
+            [if close_old_tab]
+              find_shell_pid() ──&gt; kill_old_tab()
+</div>
+
+<!-- ====== 2. Internals ====== -->
+<h2 id="internals">2. Key Internals</h2>
+
+<h3>2.1 Platform Detection</h3>
+<table>
+  <tr><th>Flag</th><th>Detection Method</th><th>Value</th></tr>
+  <tr><td><code>IS_WIN</code></td><td><code>sys.platform == "win32"</code></td><td>True on Windows (native)</td></tr>
+  <tr><td><code>IS_MAC</code></td><td><code>sys.platform == "darwin"</code></td><td>True on macOS</td></tr>
+  <tr><td><code>IS_WSL</code></td><td><code>/proc/version</code> contains "microsoft"</td><td>True inside WSL only</td></tr>
+</table>
+<p>Evaluation order in <code>build_launch_cmd</code>: <code>IS_WIN</code> &rarr; <code>IS_WSL</code> &rarr; <code>IS_MAC</code> &rarr; else (Linux).</p>
+
+<h3>2.2 Prompt-File Approach</h3>
+<p>All platforms write the prompt to <code>{project_dir}/.claude-next-prompt</code>. The new session's shell reads it, deletes it, and passes it to <code>claude</code>. This avoids:</p>
+<ul style="margin-left: 20px; margin-bottom: 12px;">
+  <li>WT <code>;</code> command separator splitting prompts (Windows)</li>
+  <li>Shell quote escaping in nested invocations (all platforms)</li>
+  <li>Argument length limits (SSH sessions)</li>
+</ul>
+
+<h3>2.3 Process Tree Walking</h3>
+<table>
+  <tr><th>Platform</th><th>Method</th><th>Terminal Host Detection</th></tr>
+  <tr><td>Windows</td><td><code>tasklist /FO CSV</code> batch query</td><td><code>windowsterminal.exe</code> as ancestor</td></tr>
+  <tr><td>Unix/WSL</td><td><code>/proc/{pid}/stat</code> parsing</td><td>gnome-terminal, sshd, tmux, etc.</td></tr>
+</table>
+
+<h3>2.4 Session State Extraction</h3>
+<p><code>_tail_lines()</code> reads the last N lines from JSONL using efficient reverse-read (no full file load). <code>_parse_and_render_tail()</code> converts to readable conversation text. Smart truncation keeps first ~25% + last ~75%, drops the middle. Capped at ~8K tokens.</p>
+
+<h3>2.5 Entry Points (pip)</h3>
+<table>
+  <tr><th>CLI Command</th><th>Python Entry</th><th>Behavior</th></tr>
+  <tr><td><code>new-session</code></td><td><code>new_session:main</code></td><td>Keeps old tab</td></tr>
+  <tr><td><code>context-reset</code></td><td><code>new_session:main_context_reset</code></td><td>Injects <code>--close-old-tab</code></td></tr>
+</table>
+
+<!-- ====== 3. Platform Matrix ====== -->
+<h2 id="platform-matrix">3. Platform Verification Matrix</h2>
+
+<table>
+  <tr>
+    <th>Platform</th>
+    <th>OS Version</th>
+    <th>Python</th>
+    <th>Terminal</th>
+    <th>Tests</th>
+    <th>Status</th>
+    <th>PR</th>
+  </tr>
+  <tr>
+    <td>Windows 11</td>
+    <td>10.0.26200</td>
+    <td>3.12</td>
+    <td>Windows Terminal</td>
+    <td>149/149</td>
+    <td><span class="badge-pass">LIVE</span></td>
+    <td>&mdash;</td>
+  </tr>
+  <tr>
+    <td>Windows Server 2022</td>
+    <td>10.0.20348</td>
+    <td>3.12.4</td>
+    <td>Windows Terminal</td>
+    <td>115/115</td>
+    <td><span class="badge-pass">EC2</span></td>
+    <td>#48</td>
+  </tr>
+  <tr>
+    <td>WSL2 (Ubuntu 24.04)</td>
+    <td>WSL 2.0</td>
+    <td>3.12.3</td>
+    <td>via wt.exe</td>
+    <td>140/140</td>
+    <td><span class="badge-pass">LIVE</span></td>
+    <td>#54</td>
+  </tr>
+  <tr>
+    <td>Ubuntu 22.04</td>
+    <td>22.04 LTS</td>
+    <td>3.10.12</td>
+    <td>gnome-terminal</td>
+    <td>105/105</td>
+    <td><span class="badge-pass">EC2</span></td>
+    <td>#47</td>
+  </tr>
+  <tr>
+    <td>macOS</td>
+    <td>&mdash;</td>
+    <td>&mdash;</td>
+    <td>Terminal.app</td>
+    <td>8 mock</td>
+    <td><span class="badge-mock">MOCK</span></td>
+    <td>#50</td>
+  </tr>
+  <tr>
+    <td>Linux (tmux)</td>
+    <td>&mdash;</td>
+    <td>&mdash;</td>
+    <td>tmux</td>
+    <td>15 mock</td>
+    <td><span class="badge-mock">MOCK</span></td>
+    <td>#51</td>
+  </tr>
+</table>
+
+<p><strong>Test count differences:</strong> Windows has 12 WT-specific tests (EncodedCommand, tab color, focus-tab chaining). WSL has 3 WSL-native tests replacing those 12. Ubuntu/Linux lack Windows-specific tests. Mock tests verify code paths on all platforms.</p>
+
+<!-- ====== 4-9. Platform Evidence ====== -->
+<h2 id="win11">4. Windows 11 Evidence</h2>
+<div class="terminal" data-title="Windows 11 Enterprise 10.0.26200 | python scripts/test.py | 2026-05-04">
+<span class="header-line">=== build_prompt ===</span>
+  <span class="pass">PASS: no session logs -> fallback prompt</span>
+  <span class="pass">PASS: with session logs -> references SESSION_STATE.md</span>
+  <span class="pass">PASS: writes SESSION_STATE.md file</span>
+
+<span class="header-line">=== _tail_lines ===</span>
+  <span class="pass">PASS: empty file -> empty list</span>
+  <span class="pass">PASS: tail 5 from 10 lines</span>
+  <span class="pass">PASS: tail starts at line 5 / ends at line 9</span>
+  <span class="pass">PASS: multi-chunk tail / last line / first line</span>
+
+<span class="header-line">=== _tool_summary ===</span>
+  <span class="pass">PASS: Bash / Read / Edit / Glob / Grep / Skill / MCP / unknown / truncated</span>
+
+<span class="header-line">=== _parse_and_render_tail ===</span>
+  <span class="pass">PASS: readable format (assistant, user, tool, done, role headers)</span>
+  <span class="pass">PASS: NOT raw JSON, shows hooks, char budget, smart truncation</span>
+  <span class="pass">PASS: no duplicates, boundary shown</span>
+
+<span class="header-line">=== _is_boilerplate_user_msg ===</span>
+  <span class="pass">PASS: empty/whitespace/stop hook/session start = boilerplate</span>
+  <span class="pass">PASS: real messages NOT boilerplate, filtered correctly</span>
+
+<span class="header-line">=== extract_session_context ===</span>
+  <span class="pass">PASS: no logs -> empty, integration readable, has role headers, not raw JSON</span>
+
+<span class="header-line">=== get_tab_color ===</span>
+  <span class="pass">PASS: returns hex, different projects different colors, same project same color</span>
+
+<span class="header-line">=== get_project_logs_dir ===</span>
+  <span class="pass">PASS: under .claude/projects, no colons, underscores/dots replaced, hyphens preserved</span>
+
+<span class="header-line">=== ensure_workspace_trusted ===</span>
+  <span class="pass">PASS: hasTrustDialogAccepted, allowedTools, full native format (10 fields)</span>
+  <span class="pass">PASS: idempotent, parent trust skips child</span>
+
+<span class="header-line">=== get_newest_jsonl ===</span>
+  <span class="pass">PASS: empty dir -> None, finds newest, returns file size</span>
+
+<span class="header-line">=== count_claude_processes ===</span>
+  <span class="pass">PASS: returns integer</span>
+
+<span class="header-line">=== verify_claude_working ===</span>
+  <span class="pass">PASS: detects new transcript file</span>
+  <span class="pass">PASS: times out when no new activity</span>
+  <span class="pass">PASS: detects transcript growth (+40 bytes)</span>
+
+<span class="header-line">=== build_launch_cmd ===</span>
+  <span class="pass">PASS: returns list on Windows</span>
+  <span class="pass">PASS: contains wt new-tab / tab title / tab color / project dir</span>
+  <span class="pass">PASS: writes prompt to file / prompt file contains prompt</span>
+  <span class="pass">PASS: uses EncodedCommand</span>
+  <span class="pass">PASS: prompt semicolons not in WT args</span>
+  <span class="pass">PASS: strips quotes from title</span>
+  <span class="pass">PASS: allows Claude status icon (no suppressApplicationTitle)</span>
+  <span class="pass">PASS: focus-tab chained atomically</span>
+
+<span class="header-line">=== WSL support === (mock)</span>
+  <span class="pass">PASS: _detect_wsl returns bool / WSL returns list / uses wt.exe + wsl.exe</span>
+  <span class="pass">PASS: WSL has tab title/color/focus-tab / writes prompt file / semicolons safe</span>
+
+<span class="header-line">=== macOS support === (mock)</span>
+  <span class="pass">PASS: osascript / Terminal.app / prompt file / tab title / semicolons safe</span>
+
+<span class="header-line">=== Linux support === (mock)</span>
+  <span class="pass">PASS: gnome-terminal / tmux / bare bash / prompt file / semicolons safe</span>
+
+<span class="header-line">=== _resolve_worktree_root ===</span>
+  <span class="pass">PASS: normal unchanged, worktree resolves, trailing slash, windows path</span>
+  <span class="pass">PASS: .claude without worktrees unchanged, nested subpath NOT resolved</span>
+
+<span class="header-line">=== dry-run mode (split behavior) ===</span>
+  <span class="pass">PASS: context_reset dry-run exits 0, prints command, closes old tab</span>
+  <span class="pass">PASS: new_session dry-run exits 0, prints command, keeps old tab</span>
+  <span class="pass">PASS: context_reset rejects --no-close / --close-old-tab sets mode</span>
+
+<span class="header-line">=== non-existent directory check ===</span>
+  <span class="pass">PASS: rejects non-existent dir for both scripts</span>
+
+<span class="header-line">=== record_session_chain ===</span>
+  <span class="pass">PASS: creates JSONL, correct basenames, project_dir, timestamp</span>
+  <span class="pass">PASS: appends records, handles None old_jsonl, skips when both None</span>
+
+========================================
+<strong>Results: 149 passed, 0 failed</strong>
+</div>
+
+<div class="terminal" data-title="Windows 11 | python new_session.py --project-dir . --dry-run">
+<span class="info">[context-reset] Wrote session state to ...\SESSION_STATE.md (31923 chars)</span>
+<span class="info">[context-reset] === New session started for context-reset ===</span>
+<span class="info">[context-reset] Project dir (state): C:\Users\joelg\...\context-reset</span>
+<span class="info">[context-reset] Platform: win32</span>
+<span class="info">[context-reset] Tab: title='context-reset', color=#4B3621</span>
+<span class="info">[context-reset] DRY RUN - command:</span>
+  ['wt', '-w', '0', 'new-tab',
+   '--title', 'context-reset', '--tabColor', '#4B3621',
+   '--startingDirectory', 'C:\Users\joelg\...\context-reset',
+   '--', 'powershell', '-NoExit', '-EncodedCommand', 'JABwACA...',
+   ';', 'focus-tab', '--previous']
+<span class="info">[context-reset]   tab shell: PID 31452 (powershell.exe), parent PID 11488 (windowsterminal.exe)</span>
+</div>
+
+<h2 id="winserver">5. Windows Server 2022 Evidence</h2>
+<div class="terminal" data-title="EC2 i-0abb3cce24d38d068 | t3.medium | scripts/ec2-test-windows.sh | 2026-05-04">
+<span class="header-line">=== ctx-reset EC2 test: Windows (3.128.32.126) ===</span>
+Testing SSH connectivity... ok
+Checking Windows environment...
+OS Name:    Microsoft Windows Server 2022 Datacenter
+OS Version: 10.0.20348 N/A Build 20348
+Python 3.12.4
+
+Syncing project files... (SFTP)
+  new_session.py, context_reset.py, task_claims.py, test.py, test_task_claims.py
+
+<span class="header-line">=== Running test suite on Windows ===</span>
+  <span class="pass">PASS: build_prompt (3/3)</span>
+  <span class="pass">PASS: _tail_lines (7/7)</span>
+  <span class="pass">PASS: _tool_summary (9/9)</span>
+  <span class="pass">PASS: _parse_and_render_tail (17/17)</span>
+  <span class="pass">PASS: _is_boilerplate_user_msg (11/11)</span>
+  <span class="pass">PASS: extract_session_context (4/4)</span>
+  <span class="pass">PASS: get_tab_color, get_project_logs_dir, ensure_workspace_trusted</span>
+  <span class="pass">PASS: verify_claude_working (3/3)</span>
+  <span class="pass">PASS: build_launch_cmd (12/12 including EncodedCommand, focus-tab)</span>
+  <span class="pass">PASS: WSL/macOS/Linux mock tests</span>
+  <span class="pass">PASS: _resolve_worktree_root, dry-run, directory check, session chain</span>
+
+========================================
+<strong>Results: 115 passed, 0 failed</strong>
+
+<span class="header-line">=== Running dry-run on Windows ===</span>
+<span class="info">[context-reset] Platform: win32</span>
+<span class="info">[context-reset] DRY RUN - command:</span> ['wt', '-w', '0', 'new-tab', ...]
+<span class="info">[context-reset] Process chain:</span> python &gt; powershell &gt; sshd &gt; services &gt; wininit
+</div>
+
+<h2 id="wsl">6. WSL2 Evidence</h2>
+<div class="terminal" data-title="WSL2 Ubuntu 24.04 | Python 3.12.3 | scripts/wsl-test.sh | 2026-05-04">
+<span class="header-line">=== WSL E2E Test ===</span>
+Project dir: C:/Users/joelg/.../context-reset
+WSL path:    /mnt/c/Users/joelg/.../context-reset
+Python 3.12.3
+
+<span class="header-line">=== Running test suite in WSL ===</span>
+  <span class="pass">PASS: build_prompt (3/3)</span>
+  <span class="pass">PASS: _tail_lines (7/7), _tool_summary (9/9)</span>
+  <span class="pass">PASS: _parse_and_render_tail (17/17)</span>
+  <span class="pass">PASS: _is_boilerplate_user_msg (11/11)</span>
+  <span class="pass">PASS: extract_session_context (4/4)</span>
+  <span class="pass">PASS: ensure_workspace_trusted (8/8)</span>
+  <span class="pass">PASS: verify_claude_working (3/3)</span>
+
+<span class="header-line">=== build_launch_cmd ===</span>
+  <span class="pass">PASS: WSL native: returns list</span>
+  <span class="pass">PASS: WSL native: has wt.exe</span>
+  <span class="pass">PASS: WSL native: has claude in bash cmd</span>
+
+  <span class="pass">PASS: WSL mock tests (11/11), macOS mock (8/8), Linux mock (15/15)</span>
+  <span class="pass">PASS: dry-run, directory check, session chain</span>
+
+========================================
+<strong>Results: 140 passed, 0 failed</strong>
+
+<span class="header-line">=== WSL detection check ===</span>
+<strong>IS_WSL=True</strong>, IS_WIN=False, IS_MAC=False
+
+<span class="header-line">=== WSL dry-run ===</span>
+<span class="info">[context-reset] Platform: WSL</span>
+<span class="info">[context-reset] Tab: title='context-reset', color=#1B3A5C</span>
+<span class="info">[context-reset] DRY RUN - command:</span>
+  ['wt.exe', '-w', '0', 'new-tab',
+   '--title', 'context-reset', '--tabColor', '#1B3A5C',
+   '--startingDirectory', 'C:\Users\joelg\...\context-reset',
+   '--', 'wsl.exe', 'bash', '-c',
+   'p=$(cat .claude-next-prompt); rm -f ...; cd ... &amp;&amp; claude "$p"',
+   ';', 'focus-tab', '--previous']
+<span class="info">[context-reset] Process chain:</span> python3 &gt; bash &gt; relay &gt; sessionleader &gt; init-systemd &gt; systemd
+</div>
+
+<h2 id="ubuntu">7. Ubuntu 22.04 Evidence</h2>
+<div class="terminal" data-title="EC2 i-08445bb95ee25fcdb | t3.medium | scripts/ec2-test.sh ubuntu | 2026-05-04">
+<span class="header-line">=== ctx-reset EC2 test: ubuntu (52.15.164.243) ===</span>
+Testing SSH connectivity... ok
+Python 3.10.12
+
+<span class="header-line">=== Running test suite on ubuntu ===</span>
+  <span class="pass">PASS: build_prompt (3/3)</span>
+  <span class="pass">PASS: _tail_lines (7/7), _tool_summary (9/9)</span>
+  <span class="pass">PASS: _parse_and_render_tail (17/17)</span>
+  <span class="pass">PASS: _is_boilerplate_user_msg (11/11)</span>
+  <span class="pass">PASS: extract_session_context (4/4)</span>
+  <span class="pass">PASS: ensure_workspace_trusted (8/8)</span>
+  <span class="pass">PASS: verify_claude_working (3/3)</span>
+  <span class="pass">PASS: build_launch_cmd (contains claude, contains prompt)</span>
+  <span class="pass">PASS: WSL/macOS/Linux mock tests</span>
+  <span class="pass">PASS: _resolve_worktree_root, dry-run, session chain</span>
+
+========================================
+<strong>Results: 105 passed, 0 failed</strong>
+
+<span class="header-line">=== Running dry-run on ubuntu ===</span>
+<span class="info">[context-reset] Platform: linux</span>
+<span class="info">[context-reset] DRY RUN - command:</span>
+  gnome-terminal --tab --title 'context-reset-test'
+  -- bash -c 'p=$(cat ...); rm -f ...; printf "\033]0;...\007";
+  cd ... &amp;&amp; claude "$p"'
+<span class="info">[context-reset] Process chain:</span> python3 &gt; bash &gt; sshd &gt; sshd &gt; sshd &gt; systemd
+</div>
+
+<h2 id="macos">8. macOS Evidence (Mock)</h2>
+<div class="terminal" data-title="Mock tests run on all platforms | PR #50">
+<span class="header-line">=== macOS support ===</span>
+  <span class="pass">PASS: macOS returns string</span>
+  <span class="pass">PASS: macOS uses osascript</span>
+  <span class="pass">PASS: macOS has Terminal.app</span>
+  <span class="pass">PASS: macOS writes prompt file</span>
+  <span class="pass">PASS: macOS prompt file content</span>
+  <span class="pass">PASS: macOS sets tab title</span>
+  <span class="pass">PASS: macOS has claude in cmd</span>
+  <span class="pass">PASS: macOS prompt semicolons safe</span>
+
+<span class="warn">Note: Live EC2 test on mac2.metal deferred due to cost ($6.80/hr).</span>
+<span class="warn">The osascript command is fully constructed and validated; only live</span>
+<span class="warn">Terminal.app interaction remains unverified.</span>
+</div>
+
+<h2 id="linux">9. Linux tmux/bare Evidence (Mock)</h2>
+<div class="terminal" data-title="Mock tests with _has_command override | PR #51">
+<span class="header-line">=== Linux support === (gnome-terminal path)</span>
+  <span class="pass">PASS: Linux gnome-terminal: is string</span>
+  <span class="pass">PASS: Linux gnome-terminal: has gnome-terminal</span>
+  <span class="pass">PASS: Linux gnome-terminal: has tab title</span>
+  <span class="pass">PASS: Linux gnome-terminal: writes prompt file</span>
+  <span class="pass">PASS: Linux gnome-terminal: has claude</span>
+
+<span class="header-line">=== Linux support === (tmux fallback)</span>
+  <span class="pass">PASS: Linux tmux: is string</span>
+  <span class="pass">PASS: Linux tmux: has tmux</span>
+  <span class="pass">PASS: Linux tmux: has new-window</span>
+  <span class="pass">PASS: Linux tmux: has tab title</span>
+  <span class="pass">PASS: Linux tmux: has claude</span>
+
+<span class="header-line">=== Linux support === (bare bash fallback)</span>
+  <span class="pass">PASS: Linux bare: is string</span>
+  <span class="pass">PASS: Linux bare: has bash -c</span>
+  <span class="pass">PASS: Linux bare: has background &amp;</span>
+  <span class="pass">PASS: Linux bare: has claude</span>
+  <span class="pass">PASS: Linux prompt semicolons safe</span>
+</div>
+
+<!-- ====== 10. Security ====== -->
+<h2 id="security">10. Security &amp; Safety</h2>
+
+<table>
+  <tr><th>Control</th><th>Description</th></tr>
+  <tr><td>Two-phase verification</td><td>Won't kill old tab until new Claude is confirmed working (process count + transcript activity)</td></tr>
+  <tr><td>Multi-Claude guard</td><td>Refuses to kill a shell that owns &gt;1 Claude processes</td></tr>
+  <tr><td>Process tree walk</td><td>Finds the correct terminal shell PID, not inner Bash tool shells</td></tr>
+  <tr><td>Detached kill (Windows)</td><td><code>taskkill /T</code> runs in a detached subprocess so it doesn't kill the caller</td></tr>
+  <tr><td>Audit logging</td><td><code>~/.claude/context-reset/YYYY-MM-DD.log</code> with 7-day retention</td></tr>
+  <tr><td>Prompt-file cleanup</td><td><code>.claude-next-prompt</code> deleted by the new session immediately after reading</td></tr>
+  <tr><td>Pre-trust safety</td><td>Only writes to <code>~/.claude.json</code> if no ancestor is already trusted</td></tr>
+  <tr><td>No secrets in repo</td><td>CI secret-scan on every push (SSH keys, tokens, PII patterns)</td></tr>
+</table>
+
+<!-- ====== 11. Files ====== -->
+<h2 id="files">11. File Reference</h2>
+
+<table>
+  <tr><th>File</th><th>Purpose</th></tr>
+  <tr><td><code>new_session.py</code></td><td>Core module: all shared functions + new-session entry point</td></tr>
+  <tr><td><code>context_reset.py</code></td><td>Thin wrapper: injects <code>--close-old-tab</code> then calls <code>new_session.main()</code></td></tr>
+  <tr><td><code>task_claims.py</code></td><td>Multi-tab task negotiation with OS-level file locks</td></tr>
+  <tr><td><code>pyproject.toml</code></td><td>Pip packaging config (v1.1.0, two CLI entry points)</td></tr>
+  <tr><td><code>scripts/test.py</code></td><td>149 tests for new_session.py</td></tr>
+  <tr><td><code>scripts/test_task_claims.py</code></td><td>35 tests for task_claims.py</td></tr>
+  <tr><td><code>scripts/wsl-test.sh</code></td><td>WSL E2E test runner (calls from Windows into WSL)</td></tr>
+  <tr><td><code>scripts/ec2-test.sh</code></td><td>Cross-platform EC2 test runner (Ubuntu)</td></tr>
+  <tr><td><code>scripts/ec2-test-windows.sh</code></td><td>Windows EC2 test runner (SFTP sync + PowerShell)</td></tr>
+  <tr><td><code>scripts/ec2-win-setup.sh</code></td><td>Create/check/test/cleanup Windows EC2 instances with SSM</td></tr>
+  <tr><td><code>scripts/ec2-win-provision.sh</code></td><td>Install OpenSSH + Python on Windows via SSM</td></tr>
+</table>
+
+<!-- ====== 12. Config ====== -->
+<h2 id="config">12. Configuration Reference</h2>
+
+<table>
+  <tr><th>Setting</th><th>Location</th><th>Purpose</th></tr>
+  <tr><td>Tab colors</td><td><code>~/.claude/context-reset/color-map.json</code></td><td>Persistent per-project color assignments (10-color palette)</td></tr>
+  <tr><td>Audit logs</td><td><code>~/.claude/context-reset/YYYY-MM-DD.log</code></td><td>Daily rotation, 7-day retention</td></tr>
+  <tr><td>Session chain</td><td><code>{project}/.claude/session-chain.jsonl</code></td><td>Records old&rarr;new session transitions</td></tr>
+  <tr><td>Session state</td><td><code>{project}/SESSION_STATE.md</code></td><td>Auto-generated transcript summary (gitignored)</td></tr>
+  <tr><td>Prompt file</td><td><code>{project}/.claude-next-prompt</code></td><td>Temporary; deleted after read by new session</td></tr>
+  <tr><td>Workspace trust</td><td><code>~/.claude.json</code></td><td>Pre-trusts workspaces to skip dialog</td></tr>
+</table>
+
+<!-- ====== 13. EC2 Infra ====== -->
+<h2 id="ec2-infra">13. EC2 Test Infrastructure</h2>
+
+<table>
+  <tr><th>Instance</th><th>ID</th><th>Type</th><th>OS</th><th>State</th><th>Notes</th></tr>
+  <tr><td>ctx-reset-ubuntu</td><td>i-08445bb95ee25fcdb</td><td>t3.medium</td><td>Ubuntu 22.04</td><td>stopped</td><td>SSH via jumpbox.pem, user: ubuntu</td></tr>
+  <tr><td>ctx-reset-win-test</td><td>i-0abb3cce24d38d068</td><td>t3.medium</td><td>Win Server 2022</td><td>stopped</td><td>SSM + SSH, user: Administrator</td></tr>
+  <tr><td>ctx-reset-windows (old)</td><td>i-0c3eebd2cfbd2ff88</td><td>t3.medium</td><td>Win Server 2022</td><td>stopped</td><td>No SSH, candidate for termination</td></tr>
+</table>
+
+<div class="note">
+  <strong>IAM:</strong> <code>ctx-reset-ssm-role</code> / <code>ctx-reset-ssm-profile</code> with <code>AmazonSSMManagedInstanceCore</code> policy.
+  <strong>Security Group:</strong> <code>sg-032e0f946606cfbb4</code> (ports 22 + 3389 open to 0.0.0.0/0).
+  <strong>Key pair:</strong> <code>jumpbox-key</code> at <code>~/.ssh/cpp-keys/jumpbox.pem</code>.
+</div>
+
+<!-- ====== 14. Changelog ====== -->
+<h2 id="changelog">14. v1.1.0 Changelog (PRs #48&ndash;#54)</h2>
+
+<table>
+  <tr><th>PR</th><th>Change</th></tr>
+  <tr><td>#48</td><td>Windows EC2 test infrastructure (SSM provisioning, SFTP sync, 115/115 pass)</td></tr>
+  <tr><td>#49</td><td>WSL support: <code>_detect_wsl()</code>, <code>wt.exe</code> + <code>wsl.exe</code> routing, <code>wslpath</code> conversion</td></tr>
+  <tr><td>#50</td><td>macOS: prompt-file approach for osascript, tab title via escape sequence</td></tr>
+  <tr><td>#51</td><td>Linux: prompt-file, tmux <code>new-window</code> fallback, bare <code>bash -c &amp;</code> last resort</td></tr>
+  <tr><td>#52</td><td>README: cross-platform table, WSL docs, prompt-file note, test counts</td></tr>
+  <tr><td>#53</td><td>pip: fix <code>context-reset</code> entry point (<code>main_context_reset</code>), bump to v1.1.0</td></tr>
+  <tr><td>#54</td><td>WSL E2E: 140/140 pass, <code>IS_WSL=True</code> detection verified, <code>wt.exe</code> routing correct</td></tr>
+</table>
+
+</div>
+
+<div class="footer">
+  context-reset v1.1.0 | L3 Admin Reference | <a href="https://github.com/grobomo/context-reset">github.com/grobomo/context-reset</a> | MIT License
+</div>
+
+</body>
+</html>

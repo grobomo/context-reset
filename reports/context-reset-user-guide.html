@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>context-reset v1.1.0 - User Guide</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif; background: #f5f5f5; color: #333; line-height: 1.6; }
+  .header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); color: white; padding: 40px 60px; }
+  .header h1 { font-size: 2.2em; font-weight: 300; margin-bottom: 8px; }
+  .header .subtitle { font-size: 1.1em; opacity: 0.8; }
+  .header .meta { margin-top: 16px; font-size: 0.9em; opacity: 0.6; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 40px 60px; }
+  h2 { font-size: 1.6em; color: #1a1a2e; margin: 40px 0 16px; border-bottom: 2px solid #e0e0e0; padding-bottom: 8px; }
+  h3 { font-size: 1.2em; color: #333; margin: 24px 0 12px; }
+  p { margin: 8px 0 16px; }
+  .platform-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0; }
+  .platform-card { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .platform-card.full { grid-column: 1 / -1; }
+  .card-header { padding: 16px 20px; font-weight: 600; font-size: 1.05em; display: flex; align-items: center; gap: 10px; }
+  .card-header .badge { margin-left: auto; background: #27ae60; color: white; padding: 3px 10px; border-radius: 12px; font-size: 0.8em; font-weight: 500; }
+  .card-header .badge.info { background: #3498db; }
+  .card-header.windows { background: #0078d4; color: white; }
+  .card-header.windows .badge { background: rgba(255,255,255,0.25); }
+  .card-header.wsl { background: #e95420; color: white; }
+  .card-header.wsl .badge { background: rgba(255,255,255,0.25); }
+  .card-header.macos { background: #555; color: white; }
+  .card-header.macos .badge { background: rgba(255,255,255,0.25); }
+  .card-header.linux { background: #dd4814; color: white; }
+  .card-header.linux .badge { background: rgba(255,255,255,0.25); }
+  .card-header.ubuntu { background: #77216f; color: white; }
+  .card-header.ubuntu .badge { background: rgba(255,255,255,0.25); }
+  .card-body { padding: 16px 20px; }
+  .terminal { background: #1e1e1e; color: #d4d4d4; font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace; font-size: 12px; padding: 16px; border-radius: 8px; overflow-x: auto; line-height: 1.5; margin: 12px 0; max-height: 500px; overflow-y: auto; position: relative; }
+  .terminal::before { content: attr(data-title); display: block; background: #333; margin: -16px -16px 12px; padding: 6px 16px; font-size: 11px; color: #999; border-radius: 8px 8px 0 0; }
+  .terminal .pass { color: #6a9955; }
+  .terminal .info { color: #569cd6; }
+  .terminal .header-line { color: #dcdcaa; font-weight: bold; }
+  .terminal .dim { color: #666; }
+  .summary-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+  .summary-table th { background: #f0f0f0; text-align: left; padding: 10px 14px; font-weight: 600; border-bottom: 2px solid #ddd; }
+  .summary-table td { padding: 10px 14px; border-bottom: 1px solid #eee; }
+  .summary-table tr:hover { background: #fafafa; }
+  .step { background: white; border-radius: 8px; padding: 20px; margin: 16px 0; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+  .step-number { display: inline-block; background: #0f3460; color: white; width: 28px; height: 28px; border-radius: 50%; text-align: center; line-height: 28px; font-weight: 600; font-size: 0.9em; margin-right: 10px; }
+  code { background: #f0f0f0; padding: 2px 6px; border-radius: 3px; font-family: 'Cascadia Code', Consolas, monospace; font-size: 0.9em; }
+  pre { background: #f8f8f8; border: 1px solid #e0e0e0; border-radius: 6px; padding: 14px; overflow-x: auto; font-family: 'Cascadia Code', Consolas, monospace; font-size: 0.85em; line-height: 1.5; margin: 12px 0; }
+  .note { background: #e8f4fd; border-left: 4px solid #3498db; padding: 12px 16px; margin: 16px 0; border-radius: 0 6px 6px 0; }
+  .toc { background: white; border-radius: 8px; padding: 20px 24px; margin: 20px 0; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+  .toc h3 { margin-top: 0; }
+  .toc ol { margin-left: 20px; }
+  .toc li { margin: 6px 0; }
+  .toc a { color: #0f3460; text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .footer { text-align: center; padding: 30px; color: #999; font-size: 0.85em; border-top: 1px solid #e0e0e0; margin-top: 40px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>context-reset v1.1.0</h1>
+  <div class="subtitle">Cross-Platform Session Management for Claude Code &mdash; User Guide</div>
+  <div class="meta">Generated 2026-05-04 | 184 tests passing across 4 platforms</div>
+</div>
+
+<div class="container">
+
+<div class="toc">
+  <h3>Contents</h3>
+  <ol>
+    <li><a href="#overview">Overview</a></li>
+    <li><a href="#quickstart">Quick Start (3 Steps)</a></li>
+    <li><a href="#platforms">Platform Support &amp; Verification</a></li>
+    <li><a href="#usage">Usage Examples</a></li>
+    <li><a href="#how-it-works">How It Works</a></li>
+    <li><a href="#troubleshooting">Troubleshooting</a></li>
+  </ol>
+</div>
+
+<!-- ====== 1. Overview ====== -->
+<h2 id="overview">1. Overview</h2>
+<p>context-reset manages Claude Code session lifecycle across terminals. When a session's context window fills up, it seamlessly transfers work to a fresh Claude instance in a new terminal tab &mdash; no human intervention needed.</p>
+
+<table class="summary-table">
+  <tr><th>Feature</th><th>Details</th></tr>
+  <tr><td>Two scripts</td><td><code>context_reset.py</code> (kills old tab) and <code>new_session.py</code> (keeps old tab)</td></tr>
+  <tr><td>State handoff</td><td>SESSION_STATE.md (auto) + TODO.md (manual)</td></tr>
+  <tr><td>Tab UX</td><td>Per-project colors, folder name titles, no focus steal</td></tr>
+  <tr><td>Safety</td><td>Two-phase verification, multi-Claude guard, audit logging</td></tr>
+  <tr><td>Dependencies</td><td>Python 3.8+ stdlib only. No pip dependencies.</td></tr>
+</table>
+
+<!-- ====== 2. Quick Start ====== -->
+<h2 id="quickstart">2. Quick Start</h2>
+
+<div class="step">
+  <p><span class="step-number">1</span> <strong>Install</strong></p>
+  <pre>pip install git+https://github.com/grobomo/context-reset</pre>
+</div>
+
+<div class="step">
+  <p><span class="step-number">2</span> <strong>Add stop hook</strong> to <code>~/.claude/settings.json</code></p>
+  <pre>{
+  "hooks": {
+    "Stop": [
+      {
+        "type": "command",
+        "command": "context-reset --project-dir $CLAUDE_PROJECT_DIR"
+      }
+    ]
+  }
+}</pre>
+</div>
+
+<div class="step">
+  <p><span class="step-number">3</span> <strong>Done.</strong> Claude will auto-reset when context gets heavy, carrying over TODO.md and a readable conversation summary.</p>
+</div>
+
+<div class="note">Works on Windows, WSL, macOS, and Linux with no extra configuration. WSL is auto-detected and routes through Windows Terminal.</div>
+
+<!-- ====== 3. Platforms ====== -->
+<h2 id="platforms">3. Platform Support &amp; Verification</h2>
+
+<p>Every platform uses the <strong>prompt-file approach</strong>: the prompt is written to <code>.claude-next-prompt</code> and read by the new session, avoiding quote/semicolon escaping issues across all terminal types.</p>
+
+<div class="platform-grid">
+
+<!-- Windows 11 -->
+<div class="platform-card full">
+  <div class="card-header windows">
+    Windows 11 (Local Development)
+    <span class="badge">149/149 PASS</span>
+  </div>
+  <div class="card-body">
+    <p><strong>Environment:</strong> Windows 11 Enterprise 10.0.26200 &bull; Python 3.12 &bull; Windows Terminal<br>
+    <strong>Launch:</strong> <code>wt new-tab</code> + <code>-EncodedCommand</code> (Base64 UTF-16LE) + atomic <code>focus-tab --previous</code></p>
+    <div class="terminal" data-title="python scripts/test.py (key sections)">
+<span class="header-line">=== build_launch_cmd ===</span>
+  <span class="pass">PASS: returns list on Windows</span>
+  <span class="pass">PASS: contains wt new-tab</span>
+  <span class="pass">PASS: contains tab title</span>
+  <span class="pass">PASS: contains tab color</span>
+  <span class="pass">PASS: writes prompt to file</span>
+  <span class="pass">PASS: uses EncodedCommand</span>
+  <span class="pass">PASS: prompt semicolons not in WT args</span>
+  <span class="pass">PASS: focus-tab chained atomically</span>
+
+<span class="header-line">=== ensure_workspace_trusted ===</span>
+  <span class="pass">PASS: hasTrustDialogAccepted is True</span>
+  <span class="pass">PASS: has full native format (10 fields)</span>
+  <span class="pass">PASS: idempotent (no error on second call)</span>
+  <span class="pass">PASS: parent trust skips child write</span>
+
+========================================
+<strong>Results: 149 passed, 0 failed</strong></div>
+    <div class="terminal" data-title="python new_session.py --project-dir . --dry-run">
+<span class="info">[context-reset] === New session started for context-reset ===</span>
+<span class="info">[context-reset] Platform: win32</span>
+<span class="info">[context-reset] Tab: title='context-reset', color=#4B3621</span>
+<span class="info">[context-reset] DRY RUN - command:</span>
+  ['wt', '-w', '0', 'new-tab',
+   '--title', 'context-reset',
+   '--tabColor', '#4B3621',
+   '--startingDirectory', 'C:\...\context-reset',
+   '--', 'powershell', '-NoExit', '-EncodedCommand', '...',
+   ';', 'focus-tab', '--previous']
+<span class="info">[context-reset]   tab shell: PID 31452 (powershell.exe)</span>
+<span class="info">[context-reset]   parent: PID 11488 (windowsterminal.exe)</span></div>
+  </div>
+</div>
+
+<!-- Windows Server 2022 -->
+<div class="platform-card">
+  <div class="card-header windows">
+    Windows Server 2022 (EC2)
+    <span class="badge">115/115 PASS</span>
+  </div>
+  <div class="card-body">
+    <p><strong>Env:</strong> Win Server 2022 Datacenter &bull; Python 3.12.4 &bull; t3.medium<br>
+    <strong>Access:</strong> SSH via OpenSSH (provisioned by SSM)</p>
+    <div class="terminal" data-title="scripts/ec2-test-windows.sh">
+<span class="header-line">=== ctx-reset EC2 test: Windows ===</span>
+OS Name:    Microsoft Windows Server 2022
+OS Version: 10.0.20348 Build 20348
+Python 3.12.4
+
+<span class="header-line">=== Running test suite ===</span>
+  <span class="pass">PASS: all core + platform tests</span>
+  <span class="pass">PASS: wt, EncodedCommand, focus-tab</span>
+  <span class="pass">PASS: dry-run, session chain</span>
+
+<strong>Results: 115 passed, 0 failed</strong>
+
+<span class="header-line">=== dry-run ===</span>
+<span class="info">Platform: win32</span>
+<span class="info">DRY RUN:</span> ['wt', 'new-tab', ...]
+<span class="info">Process chain:</span> python &gt; powershell
+  &gt; sshd &gt; services</div>
+  </div>
+</div>
+
+<!-- WSL -->
+<div class="platform-card">
+  <div class="card-header wsl">
+    WSL2 Ubuntu (on Windows)
+    <span class="badge">140/140 PASS</span>
+  </div>
+  <div class="card-body">
+    <p><strong>Env:</strong> Ubuntu 24.04 on WSL2 &bull; Python 3.12.3<br>
+    <strong>Launch:</strong> <code>wt.exe</code> + <code>wsl.exe bash -c</code></p>
+    <div class="terminal" data-title="scripts/wsl-test.sh">
+<span class="header-line">=== WSL detection ===</span>
+<strong>IS_WSL=True</strong>, IS_WIN=False, IS_MAC=False
+
+<span class="header-line">=== build_launch_cmd ===</span>
+  <span class="pass">PASS: WSL native: returns list</span>
+  <span class="pass">PASS: WSL native: has wt.exe</span>
+  <span class="pass">PASS: WSL native: has claude</span>
+
+<strong>Results: 140 passed, 0 failed</strong>
+
+<span class="header-line">=== dry-run ===</span>
+<span class="info">Platform: WSL</span>
+<span class="info">Tab: color=#1B3A5C</span>
+<span class="info">DRY RUN:</span> ['wt.exe', 'new-tab',
+  '--startingDirectory',
+  'C:\...\context-reset',
+  '--', 'wsl.exe', 'bash', '-c',
+  'p=$(cat ...); cd ... &amp;&amp; claude "$p"',
+  ';', 'focus-tab', '--previous']</div>
+  </div>
+</div>
+
+<!-- Ubuntu EC2 -->
+<div class="platform-card">
+  <div class="card-header ubuntu">
+    Ubuntu 22.04 (EC2)
+    <span class="badge">105/105 PASS</span>
+  </div>
+  <div class="card-body">
+    <p><strong>Env:</strong> Ubuntu 22.04 LTS &bull; Python 3.10.12 &bull; t3.medium<br>
+    <strong>Launch:</strong> <code>gnome-terminal --tab</code></p>
+    <div class="terminal" data-title="scripts/ec2-test.sh ubuntu">
+<span class="header-line">=== ctx-reset EC2 test: ubuntu ===</span>
+Python 3.10.12
+
+<span class="header-line">=== Running test suite ===</span>
+  <span class="pass">PASS: all core tests</span>
+  <span class="pass">PASS: gnome-terminal launch</span>
+  <span class="pass">PASS: Unix process tree walker</span>
+
+<strong>Results: 105 passed, 0 failed</strong>
+
+<span class="header-line">=== dry-run ===</span>
+<span class="info">Platform: linux</span>
+<span class="info">DRY RUN:</span> gnome-terminal --tab
+  --title 'context-reset-test'
+  -- bash -c 'p=$(cat ...); cd ...
+  &amp;&amp; claude "$p"'</div>
+  </div>
+</div>
+
+<!-- macOS -->
+<div class="platform-card">
+  <div class="card-header macos">
+    macOS (Mock-Verified)
+    <span class="badge info">8 mock tests</span>
+  </div>
+  <div class="card-body">
+    <p><strong>Launch:</strong> <code>osascript</code> (Terminal.app)<br>
+    <strong>Status:</strong> Mock-verified. Live EC2 test deferred (mac2.metal = $6.80/hr).</p>
+    <div class="terminal" data-title="macOS mock tests">
+<span class="pass">PASS: macOS uses osascript / Terminal.app</span>
+<span class="pass">PASS: macOS writes prompt file</span>
+<span class="pass">PASS: macOS sets tab title</span>
+<span class="pass">PASS: macOS prompt semicolons safe</span></div>
+  </div>
+</div>
+
+<!-- Linux tmux -->
+<div class="platform-card">
+  <div class="card-header linux">
+    Linux tmux/bare (Mock-Verified)
+    <span class="badge info">15 mock tests</span>
+  </div>
+  <div class="card-body">
+    <p><strong>Launch:</strong> <code>gnome-terminal</code>, <code>tmux new-window</code>, or <code>bash -c &amp;</code></p>
+    <div class="terminal" data-title="Linux mock tests">
+<span class="pass">PASS: gnome-terminal: tab title, prompt file</span>
+<span class="pass">PASS: tmux: new-window, tab title</span>
+<span class="pass">PASS: bare bash: background &amp;</span>
+<span class="pass">PASS: prompt semicolons safe</span></div>
+  </div>
+</div>
+
+</div><!-- platform-grid -->
+
+<!-- ====== 4. Usage ====== -->
+<h2 id="usage">4. Usage Examples</h2>
+
+<h3>Context Reset (kills old tab)</h3>
+<pre>context-reset --project-dir /path/to/project        # pip CLI
+python context_reset.py --project-dir /path/to/project  # from source</pre>
+
+<h3>New Session (keeps old tab)</h3>
+<pre>new-session --project-dir /path/to/project
+new-session --project-dir /current --target-project /other
+new-session --prompt "Fix the failing tests"</pre>
+
+<h3>Preview / Debug</h3>
+<pre>context-reset --dry-run     # show command without executing
+new-session --dry-run       # same, keeps old tab</pre>
+
+<!-- ====== 5. How It Works ====== -->
+<h2 id="how-it-works">5. How It Works</h2>
+
+<div class="step"><p><span class="step-number">1</span> <strong>Extract state</strong> &mdash; Reads last 500 JSONL lines from transcript, writes readable SESSION_STATE.md (~8K tokens)</p></div>
+<div class="step"><p><span class="step-number">2</span> <strong>Write prompt</strong> &mdash; Prompt saved to <code>.claude-next-prompt</code> file (avoids shell escaping on all platforms)</p></div>
+<div class="step"><p><span class="step-number">3</span> <strong>Launch tab</strong> &mdash; Platform-specific: wt (Win/WSL), osascript (Mac), gnome-terminal/tmux (Linux)</p></div>
+<div class="step"><p><span class="step-number">4</span> <strong>Verify</strong> &mdash; Wait for new Claude process, then confirm transcript file activity</p></div>
+<div class="step"><p><span class="step-number">5</span> <strong>Kill old tab</strong> &mdash; <code>context_reset.py</code> only. Walks process tree, refuses if multiple Claudes attached</p></div>
+
+<!-- ====== 6. Troubleshooting ====== -->
+<h2 id="troubleshooting">6. Troubleshooting</h2>
+
+<table class="summary-table">
+  <tr><th>Problem</th><th>Solution</th></tr>
+  <tr><td>Trust dialog on new tab</td><td>Script pre-trusts via <code>~/.claude.json</code>. Check file is writable.</td></tr>
+  <tr><td>Tab doesn't open (Windows)</td><td>Verify <code>wt --version</code> works from terminal.</td></tr>
+  <tr><td>Tab doesn't open (WSL)</td><td>WSL interop must be enabled. Check <code>wt.exe --version</code> from WSL.</td></tr>
+  <tr><td>Focus steal</td><td>Fixed in v1.1.0: atomic <code>focus-tab --previous</code> chaining.</td></tr>
+  <tr><td>Semicolons break launch</td><td>Fixed in v1.1.0: prompt-file approach on all platforms.</td></tr>
+  <tr><td>Old tab not killed</td><td>Run <code>--dry-run</code> to see if shell PID is detected.</td></tr>
+</table>
+
+</div>
+
+<div class="footer">
+  context-reset v1.1.0 &bull; <a href="https://github.com/grobomo/context-reset">github.com/grobomo/context-reset</a> &bull; MIT License
+</div>
+
+</body>
+</html>
