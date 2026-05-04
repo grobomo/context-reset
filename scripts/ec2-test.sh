@@ -16,7 +16,7 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 # Instance config
 declare -A INSTANCE_IPS=(
     [ubuntu]="52.15.164.243"
-    [windows]="52.14.168.89"
+    [windows]="3.128.32.126"
 )
 declare -A INSTANCE_USERS=(
     [ubuntu]="ubuntu"

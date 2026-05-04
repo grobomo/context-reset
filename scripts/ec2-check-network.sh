@@ -2,8 +2,8 @@
 # Check network connectivity and security group for an EC2 instance.
 set -euo pipefail
 
-INSTANCE_ID="${1:-i-005561c2e16240c67}"
-IP="52.14.168.89"
+INSTANCE_ID="${1:-i-0abb3cce24d38d068}"
+IP="${2:-3.128.32.126}"
 
 echo "=== Network check for $INSTANCE_ID ($IP) ==="
 
