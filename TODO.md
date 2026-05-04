@@ -253,6 +253,12 @@ Goal: share this system with others who aren't on Windows Terminal.
   - Fixed: `license = "MIT"` incompatible with Python 3.8 setuptools
   - All 7 jobs green: ubuntu/windows/macos x 3.8/3.12 + secret scan
 
+## Cleanup (031)
+
+- [ ] T001: Remove stale worktree directories (.claude/worktrees/) and old local branches from merged PRs
+- [ ] T002: Remove stale `scripts/ec2-test-windows.sh` (superseded by unified `scripts/ec2-test.sh`)
+- [ ] T003: Clean up old local branches from merged PRs
+
 ## Session 2026-05-04d handoff
 
 PRs #56-#59 merged this session (4 PRs):
