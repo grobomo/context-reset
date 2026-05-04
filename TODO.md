@@ -258,6 +258,18 @@ Goal: share this system with others who aren't on Windows Terminal.
 - [x] T001: Archive stale worktree directories and rename stale ec2-test-windows.sh (PR #61)
 - [x] T002: Clean up old local branches from merged PRs — 19 local + 29 remote refs pruned (PR #61)
 
+## Fix Quick Start and Integration Docs (032)
+
+The Quick Start hook config is wrong — `context-reset` as a Stop hook fires on EVERY stop (not just context-full), outputs no `{decision: "block"}` JSON, and blocks for 15-45s. The real flow is: auto-continue blocks stops, Claude calls context-reset itself when context is full.
+
+- [ ] T001: Research current hook-runner auto-continue setup — modules, stop-message.txt, gates, logging
+- [ ] T002: Research hook-flow-bundle/config-export skill for automated config sharing
+- [ ] T003: Fix README Quick Start — replace broken Stop hook with CLAUDE.md instruction + hook-runner recommended setup
+- [ ] T004: Add hook-runner integration section to README — full auto-continue loop setup with all required modules/gates
+- [ ] T005: Add lightweight alternative for users without hook-runner — simple Stop hook that outputs `{decision: "block"}` with separate message file
+- [ ] T006: Update user guide HTML report with corrected integration instructions
+- [ ] T007: Update admin reference HTML report with corrected integration instructions and architecture diagram
+
 ## Session 2026-05-04e handoff
 
 Cleanup session:
