@@ -5,6 +5,7 @@
 # Usage:
 #   scripts/ec2-test.sh ubuntu   # Test on ctx-reset-ubuntu
 #   scripts/ec2-test.sh windows  # Test on ctx-reset-windows
+#   scripts/ec2-test.sh macos    # Test on mac-ztsa-test (mac2.metal)
 #   scripts/ec2-test.sh connect ubuntu  # Just SSH into the instance
 #   scripts/ec2-test.sh setup ubuntu    # Install deps only (no tests)
 
@@ -17,10 +18,12 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 declare -A INSTANCE_IPS=(
     [ubuntu]="52.15.164.243"
     [windows]="3.128.32.126"
+    [macos]="18.218.210.27"
 )
 declare -A INSTANCE_USERS=(
     [ubuntu]="ubuntu"
     [windows]="Administrator"
+    [macos]="ec2-user"
 )
 
 SSH_KEY="${CTX_RESET_SSH_KEY:-$HOME/.ssh/cpp-keys/jumpbox.pem}"
@@ -38,7 +41,7 @@ IP="${INSTANCE_IPS[$TARGET]:-}"
 USER="${INSTANCE_USERS[$TARGET]:-}"
 
 if [[ -z "$IP" ]]; then
-    echo "ERROR: Unknown target '$TARGET'. Use: ubuntu, windows"
+    echo "ERROR: Unknown target '$TARGET'. Use: ubuntu, windows, macos"
     exit 1
 fi
 

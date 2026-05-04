@@ -1,0 +1,227 @@
+=== ctx-reset EC2 test: macos (18.218.210.27) ===
+Testing SSH connectivity...
+ok
+Syncing project files...
+Checking Python version...
+Python 3.9.6
+
+=== Running test suite on macos ===
+
+=== build_prompt ===
+[context-reset] No session context extracted (empty transcript or no logs)
+  PASS: no session logs -> fallback prompt
+[context-reset] Wrote session state to /var/folders/b6/_ltc1tk95h13wfd2n18gh_q00000gn/T/tmp0qmu2zkf/sp/SESSION_STATE.md (36 chars)
+  PASS: with session logs -> references SESSION_STATE.md
+  PASS: writes SESSION_STATE.md file
+
+=== _tail_lines ===
+  PASS: empty file -> empty list
+  PASS: tail 5 from 10 lines
+  PASS: tail starts at line 5
+  PASS: tail ends at line 9
+  PASS: multi-chunk tail
+  PASS: multi-chunk last line
+  PASS: multi-chunk first line
+
+=== _tool_summary ===
+  PASS: Bash summary
+  PASS: Read summary
+  PASS: Edit summary
+  PASS: Glob summary
+  PASS: Grep summary
+  PASS: Skill summary
+  PASS: MCP summary
+  PASS: unknown tool
+  PASS: long Bash cmd truncated
+
+=== _parse_and_render_tail ===
+  PASS: readable: includes assistant text
+  PASS: readable: includes user text
+  PASS: readable: includes tool summary
+  PASS: readable: includes tool result
+  PASS: readable: includes done text
+  PASS: readable: has role headers
+  PASS: readable: NOT raw JSON
+  PASS: readable: shows hooks
+  PASS: readable: shows user text after hook
+  PASS: char budget respected
+  PASS: truncation notice present
+  PASS: smart truncation: keeps first message
+  PASS: smart truncation: keeps last message
+  PASS: smart truncation: drops middle
+  PASS: no duplicate on single oversized entry
+  PASS: no duplicates with few entries
+  PASS: boundary shown
+
+=== _is_boilerplate_user_msg ===
+  PASS: empty is boilerplate
+  PASS: whitespace is boilerplate
+  PASS: stop hook is boilerplate
+  PASS: self-analysis is boilerplate
+  PASS: session start is boilerplate
+  PASS: context reset prompt is boilerplate
+  PASS: real user message is NOT boilerplate
+  PASS: looks good is NOT boilerplate
+  PASS: boilerplate user msg filtered out
+  PASS: real user msg kept
+  PASS: assistant after boilerplate kept
+
+=== extract_session_context ===
+  PASS: no logs -> empty string
+  PASS: integration: readable output
+  PASS: integration: has role headers
+  PASS: integration: not raw JSON
+
+=== get_tab_color ===
+  PASS: returns hex color
+  PASS: different projects get different colors
+  PASS: same project gets same color
+
+=== get_project_logs_dir ===
+  PASS: logs dir is under .claude/projects
+  PASS: no colons in slug
+  PASS: underscores replaced with -
+  PASS: dots replaced with -
+  PASS: slug preserves hyphens
+
+=== ensure_workspace_trusted ===
+[context-reset] Pre-trusted workspace in ~/.claude.json: /var/folders/b6/_ltc1tk95h13wfd2n18gh_q00000gn/T/tmpv30yqit3/fake-project
+  PASS: hasTrustDialogAccepted is True
+  PASS: has allowedTools
+  PASS: has full native format (10 fields)
+  PASS: has mcpServers
+  PASS: has hasClaudeMdExternalIncludesApproved
+  PASS: idempotent (no error on second call)
+  PASS: parent trust skips child write
+[context-reset] Pre-trusted workspace in ~/.claude.json: /var/folders/b6/_ltc1tk95h13wfd2n18gh_q00000gn/T/tmpv30yqit3/other-project
+  PASS: untrusted path gets written
+
+=== get_newest_jsonl ===
+  PASS: empty dir -> None
+  PASS: finds newest jsonl
+  PASS: returns file size
+
+=== count_claude_processes ===
+  PASS: returns integer
+
+=== verify_claude_working ===
+[context-reset] Phase 2: watching transcript logs in /var/folders/b6/_ltc1tk95h13wfd2n18gh_q00000gn/T/tmp2fovtnmn/dotclaude/projects/var-folders-b6-_ltc1tk95h13wfd2n18gh_q00000gn-T-tmp2fovtnmn-fake-project
+[context-reset] Verified: new session transcript detected (session-new.jsonl)
+  PASS: detects new transcript file
+[context-reset] Phase 2: watching transcript logs in /var/folders/b6/_ltc1tk95h13wfd2n18gh_q00000gn/T/tmp2fovtnmn/dotclaude/projects/var-folders-b6-_ltc1tk95h13wfd2n18gh_q00000gn-T-tmp2fovtnmn-fake-project
+  PASS: times out when no new activity
+[context-reset] Phase 2: watching transcript logs in /var/folders/b6/_ltc1tk95h13wfd2n18gh_q00000gn/T/tmp2fovtnmn/dotclaude/projects/var-folders-b6-_ltc1tk95h13wfd2n18gh_q00000gn-T-tmp2fovtnmn-fake-project
+[context-reset] Verified: transcript growing (+39 bytes)
+  PASS: detects transcript growth
+
+=== build_launch_cmd ===
+  PASS: contains osascript
+  PASS: prompt file written
+  PASS: prompt file contains prompt
+
+=== WSL support ===
+  PASS: _detect_wsl returns bool
+  PASS: WSL returns list
+  PASS: WSL uses wt.exe
+  PASS: WSL uses wsl.exe
+  PASS: WSL has tab title
+  PASS: WSL has tab color
+  PASS: WSL has focus-tab
+  PASS: WSL writes prompt file
+  PASS: WSL prompt file content
+  PASS: WSL bash cmd has claude
+  PASS: WSL prompt semicolons safe
+
+=== macOS support ===
+  PASS: macOS returns string
+  PASS: macOS uses osascript
+  PASS: macOS has Terminal.app
+  PASS: macOS writes prompt file
+  PASS: macOS prompt file content
+  PASS: macOS sets tab title
+  PASS: macOS has claude in cmd
+  PASS: macOS prompt semicolons safe
+
+=== Linux support ===
+  PASS: Linux gnome-terminal: is string
+  PASS: Linux gnome-terminal: has gnome-terminal
+  PASS: Linux gnome-terminal: has tab title
+  PASS: Linux gnome-terminal: writes prompt file
+  PASS: Linux gnome-terminal: has claude
+  PASS: Linux tmux: is string
+  PASS: Linux tmux: has tmux
+  PASS: Linux tmux: has new-window
+  PASS: Linux tmux: has tab title
+  PASS: Linux tmux: has claude
+  PASS: Linux bare: is string
+  PASS: Linux bare: has bash -c
+  PASS: Linux bare: has background &
+  PASS: Linux bare: has claude
+  PASS: Linux prompt semicolons safe
+
+=== _resolve_worktree_root ===
+  PASS: normal path unchanged
+[context-reset] Detected worktree path, resolving to project root: /projects/myapp (worktree: feat-branch)
+  PASS: worktree path resolves to root
+[context-reset] Detected worktree path, resolving to project root: /projects/myapp (worktree: feat-branch)
+  PASS: worktree trailing slash
+[context-reset] Detected worktree path, resolving to project root: C:\Dev\proj (worktree: fix-bug)
+  PASS: windows worktree path
+  PASS: .claude without worktrees unchanged
+[context-reset] Path is inside worktree subdirectory, keeping as-is: /proj/.claude/worktrees/wt/src/main.py
+  PASS: nested worktree subpath NOT resolved
+
+=== dry-run mode (split behavior) ===
+  PASS: context_reset dry-run exits 0
+  PASS: context_reset dry-run prints command
+  PASS: context_reset closes old tab
+  PASS: new_session dry-run exits 0
+  PASS: new_session dry-run prints command
+  PASS: new_session keeps old tab
+  PASS: context_reset rejects --no-close
+  PASS: --close-old-tab sets close mode
+
+=== non-existent directory check ===
+  PASS: context_reset rejects non-existent dir
+  PASS: new_session rejects non-existent dir
+  PASS: new_session rejects non-existent target-project
+
+=== record_session_chain ===
+[context-reset] Recorded session chain: old-session.jsonl -> new-session.jsonl
+  PASS: creates session-chain.jsonl
+  PASS: writes one JSONL line
+  PASS: old_session is basename only
+  PASS: new_session is basename only
+  PASS: has project_dir
+  PASS: has timestamp
+[context-reset] Recorded session chain: second-old.jsonl -> second-new.jsonl
+  PASS: appends second record
+  PASS: second record has correct old
+[context-reset] Recorded session chain: None -> first.jsonl
+  PASS: handles None old_jsonl
+  PASS: old_session is null when None
+  PASS: new_session still recorded
+  PASS: skips when both None
+
+========================================
+Results: 140 passed, 0 failed
+
+=== PASS: All tests passed on macos ===
+
+=== Running dry-run on macos ===
+[context-reset] No session context extracted (empty transcript or no logs)
+[context-reset] === New session started for context-reset-test ===
+[context-reset] Project dir (state): /tmp/context-reset-test
+[context-reset] Platform: darwin
+[context-reset] Prompt: Context was reset. Do not ask what to do. Pick up where the last session left of...
+[context-reset] Close old tab: False
+[context-reset] Tab: title='context-reset-test', color=#2D5F2D
+[context-reset] DRY RUN - command: osascript -e 'tell application "Terminal" to do script "p=$(cat \"/tmp/context-reset-test/.claude-next-prompt\"); rm -f \"/tmp/context-reset-test/.claude-next-prompt\"; printf \"\\033]0;context-reset-test\\007\"; cd \"/tmp/context-reset-test\" && claude \"$p\""'
+[context-reset]   could not identify tab shell in process chain:
+[context-reset]     PID 86931: python
+[context-reset]     PID 86930: sshd-session: ec2-user@notty
+[context-reset]     PID 86926: sshd-session: ec2-user [priv]
+[context-reset]     PID 1: launchd
+[context-reset] === Dry run complete ===
+
+=== EC2 test complete: macos ===
