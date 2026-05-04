@@ -190,10 +190,11 @@ python scripts/test_task_claims.py  # 35 tests for task_claims
 
 # Cross-platform EC2 tests
 scripts/ec2-test.sh ubuntu       # Run tests on Ubuntu EC2
-scripts/ec2-test-windows.sh      # Run tests on Windows EC2
+scripts/ec2-test.sh windows      # Run tests on Windows EC2
+scripts/ec2-test.sh macos        # Run tests on macOS EC2 (mac2.metal)
 ```
 
-Verified on: Windows 11 (149/149), Windows Server 2022 (115/115), WSL2 Ubuntu (140/140), Ubuntu 22.04 (105/105).
+Verified on: Windows 11 (149/149), Windows Server 2022 (115/115), WSL2 Ubuntu (140/140), Ubuntu 22.04 (105/105), macOS Darwin arm64 (140/140).
 
 ## Files
 
