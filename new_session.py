@@ -31,7 +31,6 @@ import signal
 import subprocess
 import os
 import sys
-import threading
 import time
 from datetime import datetime
 
@@ -831,7 +830,10 @@ def build_launch_cmd(project_dir, prompt, tab_title, tab_color):
         # Also sanitize tab title (could contain quotes from TODO.md)
         safe_title = tab_title.replace('"', '').replace("'", "")
         # Return a list — avoids shell=True and cmd.exe quote mangling.
-        # No focus-tab needed: wt new-tab via list Popen doesn't steal focus.
+        # Chain focus-tab after new-tab so WT switches back atomically.
+        # The `;` here is safe because the prompt is in EncodedCommand (no
+        # user content reaches WT's parser). WT processes both subcommands
+        # in one call — no visible tab flash.
         return [
             'wt', '-w', '0', 'new-tab',
             '--title', safe_title,
@@ -839,6 +841,7 @@ def build_launch_cmd(project_dir, prompt, tab_title, tab_color):
             '--startingDirectory', project_dir,
             '--',
             'powershell', '-NoExit', '-EncodedCommand', encoded,
+            ';', 'focus-tab', '--previous',
         ]
     elif IS_MAC:
         escaped = prompt.replace("'", "'\\''")
@@ -858,33 +861,6 @@ def build_launch_cmd(project_dir, prompt, tab_title, tab_color):
             return f"bash -c 'cd \"{project_dir}\" && claude '\"'\"'{escaped}'\"'\"'' &"
 
 
-def _restore_tab_focus():
-    """Switch WT back to the previous tab after opening a new one.
-
-    Uses `wt focus-tab --previous` which restores the actual TAB focus within
-    Windows Terminal — not just the OS window focus, which was the old approach.
-    Runs in a background thread with a short delay for WT to finish creating
-    the new tab.
-    """
-    if not IS_WIN:
-        return
-
-    def _restore():
-        try:
-            # Wait for WT to finish creating the new tab and switching to it
-            time.sleep(0.5)
-            subprocess.Popen(
-                ['wt', '-w', '0', 'focus-tab', '--previous'],
-                startupinfo=_si(),
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            log("Sent focus-tab --previous to restore tab focus")
-        except Exception as e:
-            log(f"WARNING: could not restore tab focus: {e}")
-
-    t = threading.Thread(target=_restore, daemon=True)
-    t.start()
 
 
 
@@ -1318,7 +1294,6 @@ def main():
         popen_kwargs = {"shell": True}
     log(f"Launch cmd: {cmd}")
     subprocess.Popen(cmd, **popen_kwargs)
-    _restore_tab_focus()
     log(f"New tab opened in {launch_name}")
 
     if not close_old:
