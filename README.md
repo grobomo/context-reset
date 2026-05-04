@@ -252,7 +252,7 @@ The new session reads `SESSION_STATE.md` first (what actually happened), then `T
 ## Tests
 
 ```bash
-python scripts/test.py           # 149 tests (all platforms via mocks)
+python scripts/test.py           # 162 tests (all platforms via mocks)
 python scripts/test_task_claims.py  # 35 tests for task_claims
 
 # Cross-platform EC2 tests
@@ -261,7 +261,7 @@ scripts/ec2-test.sh windows      # Run tests on Windows EC2
 scripts/ec2-test.sh macos        # Run tests on macOS EC2 (mac2.metal)
 ```
 
-Verified on: Windows 11 (149/149), Windows Server 2022 (115/115), WSL2 Ubuntu (140/140), Ubuntu 22.04 (105/105), macOS Darwin arm64 (140/140).
+Verified on: Windows 11 (162/162), Windows Server 2022 (115/115), WSL2 Ubuntu (140/140), Ubuntu 22.04 (105/105), macOS Darwin arm64 (140/140).
 
 ## Files
 
@@ -269,8 +269,9 @@ Verified on: Windows 11 (149/149), Windows Server 2022 (115/115), WSL2 Ubuntu (1
 new_session.py            # Shared functions + new-session launcher (never closes old tab)
 context_reset.py          # Same-project reset (always closes old tab)
 task_claims.py            # Multi-tab task negotiation with OS-level file locks
-scripts/test.py           # Tests (149 tests)
+scripts/test.py           # Tests (162 tests)
 scripts/test_task_claims.py  # Tests for task_claims (35 tests)
+scripts/test_focus_live.py # Live focus-steal verification (Windows only)
 scripts/ec2-test.sh       # Cross-platform EC2 test runner (ubuntu/windows/macos)
 ~/.claude/context-reset/  # Runtime data (logs, color map)
 SESSION_STATE.md          # Auto-generated in target project (gitignored)
