@@ -1142,39 +1142,39 @@ def _get_wt_settings_path_wsl():
 
 def _kill_old_tab_wsl(shell_pid, close_tab):
     log("=== Context reset complete ===")
-    if close_tab:
-        settings_path = _get_wt_settings_path_wsl()
-        if settings_path and os.path.exists(settings_path):
-            try:
-                with open(settings_path, 'r', encoding='utf-8') as f:
-                    settings = json.load(f)
-                settings.setdefault("profiles", {}).setdefault("defaults", {})["closeOnExit"] = "always"
-                with open(settings_path, 'w', encoding='utf-8') as f:
-                    json.dump(settings, f, indent=4, ensure_ascii=False)
-                log("closeOnExit -> always (WSL)")
-            except Exception as e:
-                log(f"WARNING: failed to set closeOnExit: {e}")
-    try:
-        os.killpg(os.getpgid(shell_pid), signal.SIGTERM)
-    except ProcessLookupError:
-        pass
-    except PermissionError:
+    settings_path = _get_wt_settings_path_wsl() if close_tab else None
+    if close_tab and settings_path and os.path.exists(settings_path):
         try:
-            os.kill(shell_pid, signal.SIGTERM)
-        except Exception:
-            pass
-    if close_tab:
-        time.sleep(0.3)
-        if settings_path and os.path.exists(settings_path):
-            try:
-                with open(settings_path, 'r', encoding='utf-8') as f:
-                    settings = json.load(f)
-                settings.setdefault("profiles", {}).setdefault("defaults", {})["closeOnExit"] = "graceful"
-                with open(settings_path, 'w', encoding='utf-8') as f:
-                    json.dump(settings, f, indent=4, ensure_ascii=False)
-                log("closeOnExit -> graceful (WSL)")
-            except Exception:
-                pass
+            with open(settings_path, 'r', encoding='utf-8') as f:
+                settings = json.load(f)
+            settings.setdefault("profiles", {}).setdefault("defaults", {})["closeOnExit"] = "always"
+            with open(settings_path, 'w', encoding='utf-8') as f:
+                json.dump(settings, f, indent=4, ensure_ascii=False)
+            log("closeOnExit -> always (WSL)")
+        except Exception as e:
+            log(f"WARNING: failed to set closeOnExit: {e}")
+    kill_script = (
+        f'import os, signal, time, json\n'
+        f'time.sleep(0.5)\n'
+        f'os.kill({shell_pid}, signal.SIGKILL)\n'
+    )
+    if close_tab and settings_path:
+        kill_script += (
+            f'time.sleep(0.3)\n'
+            f'try:\n'
+            f'    s = json.load(open("{settings_path}"))\n'
+            f'    s.setdefault("profiles", {{}}).setdefault("defaults", {{}})["closeOnExit"] = "graceful"\n'
+            f'    json.dump(s, open("{settings_path}", "w"), indent=4, ensure_ascii=False)\n'
+            f'except Exception:\n'
+            f'    pass\n'
+        )
+    subprocess.Popen(
+        [sys.executable, '-c', kill_script],
+        start_new_session=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    log(f"Detached kill spawned for PID {shell_pid}")
     sys.exit(0)
 
 
