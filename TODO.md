@@ -56,3 +56,4 @@ See CHANGELOG.md for full history. Major milestones:
 
 - [x] **WSL transcript path mismatch**: Fixed — `get_project_logs_dir` was stripping the leading dash from slugs. Claude Code's encoding keeps it (e.g., `-mnt-c-Users-...`). Removed the `slug[1:]` strip.
 - [x] **Tab not closed on WSL**: Fixed by the path mismatch fix above — Phase 2 now finds the transcript correctly, so the old tab gets closed.
+- [ ] T037: **WSL tab-close PID detection** — Add `relay`, `sessionleader` to terminal_hosts and make comparison case-insensitive. WSL WT uses `Relay(PID)` as bridge process; without this the shell PID isn't found and old tab can't be closed.
