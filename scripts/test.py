@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Tests for new_session.py -- run with: python scripts/test.py"""
 
+import glob
 import json
 import os
 import re
@@ -754,6 +755,104 @@ if sys.platform == "win32":
         test(f"kill script ({label}) captures stderr", "stderr" in script)
 else:
     print("  (skipped on non-Windows)")
+
+# --- WSL kill path validation ---
+print("\n=== WSL kill path ===")
+with tempfile.TemporaryDirectory() as d:
+    fake_settings = os.path.join(d, "settings.json")
+    with open(fake_settings, 'w') as f:
+        json.dump({"profiles": {"defaults": {"closeOnExit": "graceful"}}}, f)
+
+    captured_wsl_scripts = {}
+    real_popen_wsl = subprocess.Popen
+    def capture_popen_wsl(args, **kw):
+        if isinstance(args, list) and len(args) >= 3 and args[1] == '-c':
+            captured_wsl_scripts[len(captured_wsl_scripts)] = args[2]
+            return type('P', (), {'pid': 0})()
+        return real_popen_wsl(args, **kw)
+
+    subprocess.Popen = capture_popen_wsl
+    real_exit_wsl = sys.exit
+    class _FakeExitWSL(Exception): pass
+    sys.exit = lambda c=0: (_ for _ in ()).throw(_FakeExitWSL())
+    orig_get_path = context_reset._get_wt_settings_path_wsl
+    context_reset._get_wt_settings_path_wsl = lambda: fake_settings
+
+    # Test with close_tab=True
+    try:
+        context_reset._kill_old_tab_wsl(12345, close_tab=True)
+    except _FakeExitWSL:
+        pass
+
+    # Test with close_tab=False
+    try:
+        context_reset._kill_old_tab_wsl(12345, close_tab=False)
+    except _FakeExitWSL:
+        pass
+
+    subprocess.Popen = real_popen_wsl
+    sys.exit = real_exit_wsl
+    context_reset._get_wt_settings_path_wsl = orig_get_path
+
+    # Verify settings were modified (closeOnExit -> always)
+    with open(fake_settings) as f:
+        modified = json.load(f)
+    test("WSL kill: sets closeOnExit to always", modified["profiles"]["defaults"]["closeOnExit"] == "always")
+
+    # Verify kill scripts
+    test("WSL kill: spawns detached subprocess (close_tab=True)", 0 in captured_wsl_scripts)
+    test("WSL kill: spawns detached subprocess (close_tab=False)", 1 in captured_wsl_scripts)
+
+    for idx, script in captured_wsl_scripts.items():
+        label = "close_tab=True" if idx == 0 else "close_tab=False"
+        try:
+            compile(script, f'<wsl_kill_{label}>', 'exec')
+            test(f"WSL kill script ({label}) is valid Python", True)
+        except SyntaxError as e:
+            test(f"WSL kill script ({label}) is valid Python: {e}", False)
+        test(f"WSL kill script ({label}) uses SIGKILL", "SIGKILL" in script)
+        test(f"WSL kill script ({label}) targets PID 12345", "12345" in script)
+
+    if 0 in captured_wsl_scripts:
+        test("WSL kill (close_tab=True) restores closeOnExit", "graceful" in captured_wsl_scripts[0])
+    if 1 in captured_wsl_scripts:
+        test("WSL kill (close_tab=False) no closeOnExit restore", "graceful" not in captured_wsl_scripts[1])
+
+# --- _get_wt_settings_path_wsl fallback ---
+print("\n=== WSL settings path detection ===")
+with tempfile.TemporaryDirectory() as d:
+    fake_wt_path = os.path.join(d, "Users", "testuser", "AppData", "Local",
+                                "Packages", "Microsoft.WindowsTerminal_8wekyb3d8bbwe",
+                                "LocalState")
+    os.makedirs(fake_wt_path)
+    fake_settings_file = os.path.join(fake_wt_path, "settings.json")
+    with open(fake_settings_file, 'w') as f:
+        f.write("{}")
+
+    orig_check_output = subprocess.check_output
+    orig_glob = glob.glob
+
+    # Test: cmd.exe returns valid username
+    subprocess.check_output = lambda *a, **kw: 'testuser\r\n'
+    glob.glob = orig_glob
+    context_reset._get_wt_settings_path_wsl.__module__  # just access to verify callable
+    # Can't fully test without /mnt/c path, but verify function is callable
+    result = context_reset._get_wt_settings_path_wsl()
+    test("WSL settings path: returns string or None", result is None or isinstance(result, str))
+
+    # Test: cmd.exe fails, glob fallback
+    subprocess.check_output = lambda *a, **kw: (_ for _ in ()).throw(FileNotFoundError())
+    glob.glob = lambda pattern: [fake_settings_file] if "WindowsTerminal" in pattern else []
+    result = context_reset._get_wt_settings_path_wsl()
+    test("WSL settings path: glob fallback works", result == fake_settings_file)
+
+    # Test: both fail
+    glob.glob = lambda pattern: []
+    result = context_reset._get_wt_settings_path_wsl()
+    test("WSL settings path: returns None when not found", result is None)
+
+    subprocess.check_output = orig_check_output
+    glob.glob = orig_glob
 
 # --- Duplicate session guard ---
 print("\n=== duplicate session guard ===")
