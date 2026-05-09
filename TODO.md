@@ -26,6 +26,10 @@ v1.3.0 — Stable. 188 tests (153 + 35 task_claims), 0 failures. CI green on 3 O
 
 ## Open Tasks
 
+- [x] T035: API retry mechanism — `api_check.py` utility + `--wait-for-api` flag in new_session.py
+  - `api_check.py --check` (exit 0/1), `--wait` (block until healthy), `--watch PROJECT` (detect stall + wait + respawn)
+  - `new_session.py --wait-for-api` polls every 60s before launching (max 30min)
+  - Hook-runner integration (stop module spawns watcher) tracked as T635 in hook-runner
 - [x] T034: Add `--reason` arg for spawn-reason tracking
   - **Problem**: Sessions spawn autonomously via stop-hook → context-reset chains, but there's no record of WHY a session was created. User discovered 14 consecutive hook-runner sessions running all day with no way to trace the origin.
   - **Changes needed**:

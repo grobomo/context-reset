@@ -798,6 +798,57 @@ with tempfile.TemporaryDirectory() as d:
 
     context_reset.get_project_logs_dir = orig_logs
 
+# --- api_check ---
+print("\n=== api_check ===")
+import api_check
+
+# check_api_health — real check (API should be up)
+test("api healthy (live)", api_check.check_api_health())
+
+# check_api_health — unreachable host
+test("api unhealthy (bad host)", not api_check.check_api_health(host="192.0.2.1", port=1, timeout=1))
+
+# wait_for_api — already healthy returns immediately
+t0 = time.time()
+result = api_check.wait_for_api(interval=1, max_wait=3)
+test("wait_for_api returns True when healthy", result is True)
+test("wait_for_api returns fast when healthy", time.time() - t0 < 2)
+
+# wait_for_api — unreachable host, short timeout (check_timeout=1 avoids 5s socket waits)
+t0 = time.time()
+result2 = api_check.wait_for_api(interval=1, max_wait=3, host="192.0.2.1", port=1, check_timeout=1)
+test("wait_for_api returns False on timeout", result2 is False)
+test("wait_for_api respects max_wait", time.time() - t0 < 8)
+
+# is_session_stalled — with fresh transcript
+with tempfile.TemporaryDirectory() as d:
+    fake_project = os.path.join(d, "stall-test")
+    os.makedirs(fake_project)
+    # Mock _get_newest_transcript
+    fake_transcript = os.path.join(d, "session.jsonl")
+    with open(fake_transcript, "w") as f:
+        f.write('{"type":"test"}\n')
+    import unittest.mock as _mock_api
+    with _mock_api.patch('api_check._get_newest_transcript', return_value=fake_transcript):
+        test("fresh transcript not stalled", not api_check.is_session_stalled(fake_project, threshold_s=60))
+        # Make it old
+        old_time = time.time() - 300
+        os.utime(fake_transcript, (old_time, old_time))
+        test("old transcript is stalled", api_check.is_session_stalled(fake_project, threshold_s=60))
+
+# is_session_stalled — no transcript
+with _mock_api.patch('api_check._get_newest_transcript', return_value=None):
+    test("no transcript -> not stalled", not api_check.is_session_stalled("/nonexistent"))
+
+# watch_and_respawn — session not stalled (early exit)
+with _mock_api.patch('api_check.is_session_stalled', return_value=False):
+    test("watch: not stalled -> False", not api_check.watch_and_respawn("/tmp"))
+
+# watch_and_respawn — stalled but API healthy (different issue)
+with _mock_api.patch('api_check.is_session_stalled', return_value=True):
+    with _mock_api.patch('api_check.check_api_health', return_value=True):
+        test("watch: stalled + api healthy -> False", not api_check.watch_and_respawn("/tmp"))
+
 # --- Summary ---
 print(f"\n{'='*40}")
 print(f"Results: {PASS} passed, {FAIL} failed")

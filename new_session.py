@@ -1358,9 +1358,21 @@ def main():
                         help="Kill current tab without launching a new one (self-close)")
     parser.add_argument("--reason", default=None,
                         help="Why this session was spawned (e.g., 'stop-hook: context full')")
+    parser.add_argument("--wait-for-api", action="store_true",
+                        help="Wait for API health before launching (polls every 60s, max 30min)")
     args = parser.parse_args()
 
     close_old = args.close_old_tab
+
+    # Phase 0: Wait for API health if requested
+    if args.wait_for_api:
+        from api_check import check_api_health, wait_for_api
+        if not check_api_health():
+            log("API unreachable — waiting for recovery before launching...")
+            if not wait_for_api(interval=60, max_wait=1800):
+                log("ERROR: API did not recover within 30 minutes, aborting")
+                return
+            log("API recovered, proceeding with launch")
 
     lock_fh, lock_file = acquire_lock(args.project_dir)
     if lock_fh is None and lock_file is None:
