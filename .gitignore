@@ -3,6 +3,7 @@ __pycache__/
 archive/
 SESSION_STATE.md
 .claude-next-prompt
+.claude-launch.sh
 .test-results/
 .workflow-state.json
 specs/
