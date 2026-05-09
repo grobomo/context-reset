@@ -12,7 +12,7 @@ v1.3.0 — Stable. 188 tests (153 + 35 task_claims), 0 failures. CI green on 3 O
 | WSL2 | 153 | Live |
 | macOS (Darwin arm64) | 140 | EC2 |
 
-69 PRs merged. Key capabilities:
+71 PRs merged. Key capabilities:
 - Two scripts: `context_reset.py` (kills old tab) / `new_session.py` (keeps old tab)
 - SESSION_STATE.md auto-handoff (readable transcript, 8K token cap)
 - `--reason` arg for spawn-reason tracking in session chains
@@ -56,4 +56,4 @@ See CHANGELOG.md for full history. Major milestones:
 
 - [x] **WSL transcript path mismatch**: Fixed — `get_project_logs_dir` was stripping the leading dash from slugs. Claude Code's encoding keeps it (e.g., `-mnt-c-Users-...`). Removed the `slug[1:]` strip.
 - [x] **Tab not closed on WSL**: Fixed by the path mismatch fix above — Phase 2 now finds the transcript correctly, so the old tab gets closed.
-- [ ] T037: **WSL tab-close PID detection** — Add `relay`, `sessionleader` to terminal_hosts and make comparison case-insensitive. WSL WT uses `Relay(PID)` as bridge process; without this the shell PID isn't found and old tab can't be closed.
+- [x] T037: **WSL tab-close PID detection** — Added `relay`, `sessionleader` to terminal_hosts and made comparison case-insensitive. Fixes old tab not closing on context reset in WSL.
