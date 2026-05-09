@@ -2,17 +2,17 @@
 
 ## Current Status
 
-v1.3.0 — Stable. 188 tests (153 + 35 task_claims), 0 failures. CI green on 3 OS x 2 Python.
+v1.3.0 — Stable. 206 tests (171 + 35 task_claims), 0 failures. CI green on 3 OS x 2 Python.
 
 | Platform | Tests | Verified |
 |----------|-------|----------|
 | Windows 11 | 162 | Live + CI |
 | Windows Server 2022 | 115 | EC2 |
 | Ubuntu 22.04 | 105 | EC2 |
-| WSL2 | 153 | Live |
+| WSL2 | 171 | Live |
 | macOS (Darwin arm64) | 140 | EC2 |
 
-71 PRs merged. Key capabilities:
+73 PRs merged. Key capabilities:
 - Two scripts: `context_reset.py` (kills old tab) / `new_session.py` (keeps old tab)
 - SESSION_STATE.md auto-handoff (readable transcript, 8K token cap)
 - `--reason` arg for spawn-reason tracking in session chains
@@ -23,10 +23,13 @@ v1.3.0 — Stable. 188 tests (153 + 35 task_claims), 0 failures. CI green on 3 O
 - Pip-installable (`pip install git+https://github.com/grobomo/context-reset`)
 - Bootstrap script for team onboarding
 - `scripts/close-dead-tabs.ps1` utility for cleaning up dead WT tabs
+- Tab title persistence (`--suppressApplicationTitle` prevents Claude Code from overwriting)
+- `--diagnose` mode: two-layer health check (proxy vs upstream) with root cause analysis
+- WSL tab-close: detached SIGKILL with closeOnExit toggle (E2E verified)
 
 ## Open Tasks
 
-- [ ] T038: **WSL tab-close broken** — Fixed: added `_kill_old_tab_wsl()` that toggles WT `closeOnExit` to "always" before SIGTERM, then restores to "graceful". E2E TODO: run `context_reset.py` and verify old tab actually closes.
+- [x] T038: **WSL tab-close E2E** — Verified: detached SIGKILL (PR #73) closes old tab in WSL. E2E proved by spawned session continuing work.
 - [x] T035: API retry mechanism — `api_check.py` utility + `--wait-for-api` flag in new_session.py
   - `api_check.py --check` (exit 0/1), `--wait` (block until healthy), `--watch PROJECT` (detect stall + wait + respawn)
   - `new_session.py --wait-for-api` polls every 60s before launching (max 30min)
