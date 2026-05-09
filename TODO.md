@@ -2,17 +2,17 @@
 
 ## Current Status
 
-v1.3.0 — Stable. 206 tests (171 + 35 task_claims), 0 failures. CI green on 3 OS x 2 Python.
+v1.3.0 — Stable. 220 tests (185 + 35 task_claims), 0 failures. CI green on 3 OS x 2 Python.
 
 | Platform | Tests | Verified |
 |----------|-------|----------|
 | Windows 11 | 162 | Live + CI |
 | Windows Server 2022 | 115 | EC2 |
 | Ubuntu 22.04 | 105 | EC2 |
-| WSL2 | 171 | Live |
+| WSL2 | 185 | Live |
 | macOS (Darwin arm64) | 140 | EC2 |
 
-73 PRs merged. Key capabilities:
+75 PRs merged. Key capabilities:
 - Two scripts: `context_reset.py` (kills old tab) / `new_session.py` (keeps old tab)
 - SESSION_STATE.md auto-handoff (readable transcript, 8K token cap)
 - `--reason` arg for spawn-reason tracking in session chains

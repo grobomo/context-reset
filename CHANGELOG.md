@@ -1,5 +1,29 @@
 # Changelog
 
+## v1.3.0 (2026-05-09)
+
+WSL reliability and observability. 75 PRs merged total.
+
+### WSL Tab-Close (T037, T038)
+- **PID detection**: Added `relay`, `sessionleader` to terminal_hosts, case-insensitive matching (PR #70)
+- **Detached SIGKILL**: Spawns a new-session Python subprocess that waits 500ms then SIGKILLs the shell. Avoids killing the caller's own process tree. (PR #73)
+- **closeOnExit toggle**: Sets WT `closeOnExit` to "always" before kill, restores to "graceful" after tab closes (PR #72)
+- **E2E verified**: context_reset.py successfully closes old tab and spawns new session in WSL
+
+### Features (T034, T035)
+- **`--reason` arg**: Spawn-reason tracking in session chains — records WHY a session was created in session-chain.jsonl and SESSION_STATE.md (PR #69)
+- **`--diagnose` mode**: Two-layer health check — tests proxy AND upstream Claude API, reports root cause (proxy_down, upstream_down, both_down, healthy)
+- **API retry mechanism**: `api_check.py --check|--wait|--watch` utility + `--wait-for-api` flag (polls 60s, max 30min)
+- **Tab title persistence**: `--suppressApplicationTitle` prevents Claude Code from overwriting WT tab title (PR #69)
+
+### Bug Fixes
+- **WSL transcript path mismatch**: `get_project_logs_dir` was stripping leading dash from slugs — Claude Code encoding keeps it (e.g., `-mnt-c-Users-...`)
+- **`close-dead-tabs.ps1`**: Utility for cleaning up dead WT tabs that accumulate during development
+
+### Tests
+- 220 total (185 unit + 35 task_claims), up from 188
+- 14 new tests covering `_kill_old_tab_wsl` and `_get_wt_settings_path_wsl`
+
 ## v1.2.0 (2026-05-04)
 
 Focus steal and tab multiplication fixes. 67 PRs merged total.
