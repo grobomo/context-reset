@@ -26,7 +26,7 @@ v1.3.0 — Stable. 188 tests (153 + 35 task_claims), 0 failures. CI green on 3 O
 
 ## Open Tasks
 
-- [ ] T038: **WSL tab-close broken** — `_kill_old_tab_unix()` sends SIGTERM to shell but WT tab stays open in WSL. Need WSL-specific kill: use `taskkill.exe` (accessible from WSL) + WT `closeOnExit` toggle.
+- [ ] T038: **WSL tab-close broken** — Fixed: added `_kill_old_tab_wsl()` that toggles WT `closeOnExit` to "always" before SIGTERM, then restores to "graceful". E2E TODO: run `context_reset.py` and verify old tab actually closes.
 - [x] T035: API retry mechanism — `api_check.py` utility + `--wait-for-api` flag in new_session.py
   - `api_check.py --check` (exit 0/1), `--wait` (block until healthy), `--watch PROJECT` (detect stall + wait + respawn)
   - `new_session.py --wait-for-api` polls every 60s before launching (max 30min)
