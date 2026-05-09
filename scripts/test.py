@@ -3,6 +3,7 @@
 
 import json
 import os
+import re
 import sys
 import subprocess
 import tempfile
@@ -33,9 +34,7 @@ with tempfile.TemporaryDirectory() as d:
     # With a fake JSONL log, build_prompt should write SESSION_STATE.md and reference it
     fake_project = os.path.join(d, "sp")
     os.makedirs(fake_project)
-    logs_slug = os.path.abspath(fake_project).replace("\\", "-").replace("/", "-").replace(":", "-")
-    if logs_slug.startswith("-"):
-        logs_slug = logs_slug[1:]
+    logs_slug = re.sub(r'[^a-zA-Z0-9-]', '-', os.path.abspath(fake_project))
     fake_logs = os.path.join(d, "dotclaude", "projects", logs_slug)
     os.makedirs(fake_logs)
     with open(os.path.join(fake_logs, "session.jsonl"), "w") as f:
@@ -45,6 +44,16 @@ with tempfile.TemporaryDirectory() as d:
     prompt2 = context_reset.build_prompt(fake_project)
     test("with session logs -> references SESSION_STATE.md", "SESSION_STATE.md" in prompt2)
     test("writes SESSION_STATE.md file", os.path.exists(os.path.join(fake_project, "SESSION_STATE.md")))
+    # Test: reason appears in SESSION_STATE.md
+    context_reset.build_prompt(fake_project, reason="stop-hook: context full")
+    with open(os.path.join(fake_project, "SESSION_STATE.md"), "r") as f:
+        state_content = f.read()
+    test("reason in SESSION_STATE.md", "## Spawn Reason" in state_content and "stop-hook: context full" in state_content)
+    # Test: no reason section when omitted
+    context_reset.build_prompt(fake_project)
+    with open(os.path.join(fake_project, "SESSION_STATE.md"), "r") as f:
+        state_no_reason = f.read()
+    test("no reason section when omitted", "## Spawn Reason" not in state_no_reason)
     context_reset.get_project_logs_dir = orig_fn
 
 # --- _tail_lines ---
@@ -195,9 +204,7 @@ with tempfile.TemporaryDirectory() as d:
     # With fake logs
     fake_project = os.path.join(d, "proj")
     os.makedirs(fake_project)
-    logs_slug = os.path.abspath(fake_project).replace("\\", "-").replace("/", "-").replace(":", "-")
-    if logs_slug.startswith("-"):
-        logs_slug = logs_slug[1:]
+    logs_slug = re.sub(r'[^a-zA-Z0-9-]', '-', os.path.abspath(fake_project))
     fake_logs = os.path.join(d, "dotclaude", "projects", logs_slug)
     os.makedirs(fake_logs)
     test_entries = [
@@ -247,6 +254,20 @@ with tempfile.TemporaryDirectory() as d:
     test("underscores replaced with -", "_" not in slug)
     test("dots replaced with -", "." not in slug)
     test("slug preserves hyphens", "my-project" in slug)
+
+# Unix paths keep leading dash (Claude Code encoding matches -mnt-c-... / -home-ubu-...)
+import unittest.mock as _mock
+with _mock.patch('new_session.os.path.abspath', return_value="/mnt/c/Users/test/project"):
+    slug = os.path.basename(context_reset.get_project_logs_dir("/mnt/c/Users/test/project"))
+    test("unix path keeps leading dash", slug.startswith("-"))
+    test("unix slug matches CC encoding", slug == "-mnt-c-Users-test-project")
+with _mock.patch('new_session.os.path.abspath', return_value="/home/ubu/Documents/proj"):
+    slug = os.path.basename(context_reset.get_project_logs_dir("/home/ubu/Documents/proj"))
+    test("home path keeps leading dash", slug == "-home-ubu-Documents-proj")
+# Windows paths have no leading dash (drive letter is alphanumeric)
+with _mock.patch('new_session.os.path.abspath', return_value="C-Users-test-project"):
+    slug = os.path.basename(context_reset.get_project_logs_dir("C:\\Users\\test\\project"))
+    test("windows path no leading dash", slug == "C-Users-test-project")
 
 # --- ensure_workspace_trusted ---
 print("\n=== ensure_workspace_trusted ===")
@@ -318,9 +339,7 @@ with tempfile.TemporaryDirectory() as d:
     # Mock: create a fake project logs dir with matching slug
     fake_project = os.path.join(d, "fake-project")
     os.makedirs(fake_project)
-    logs_slug = os.path.abspath(fake_project).replace("\\", "-").replace("/", "-").replace(":", "-")
-    if logs_slug.startswith("-"):
-        logs_slug = logs_slug[1:]
+    logs_slug = re.sub(r'[^a-zA-Z0-9-]', '-', os.path.abspath(fake_project))
     fake_logs = os.path.join(d, "dotclaude", "projects", logs_slug)
     os.makedirs(fake_logs)
 
@@ -615,9 +634,7 @@ print("\n=== record_session_chain ===")
 with tempfile.TemporaryDirectory() as d:
     fake_project = os.path.join(d, "chain-project")
     os.makedirs(fake_project)
-    logs_slug = os.path.abspath(fake_project).replace("\\", "-").replace("/", "-").replace(":", "-")
-    if logs_slug.startswith("-"):
-        logs_slug = logs_slug[1:]
+    logs_slug = re.sub(r'[^a-zA-Z0-9-]', '-', os.path.abspath(fake_project))
     fake_logs = os.path.join(d, "dotclaude", "projects", logs_slug)
     os.makedirs(fake_logs)
 
@@ -659,6 +676,20 @@ with tempfile.TemporaryDirectory() as d:
     with open(chain_file) as fh:
         lines = fh.readlines()
     test("skips when both None", len(lines) == 3)
+
+    # Test: reason field included when provided
+    context_reset.record_session_chain(fake_project, "/logs/a.jsonl", "/logs/b.jsonl", reason="stop-hook: context full")
+    with open(chain_file) as fh:
+        lines = fh.readlines()
+    record_reason = json.loads(lines[-1])
+    test("reason field present", record_reason.get("reason") == "stop-hook: context full")
+
+    # Test: reason field absent when not provided
+    context_reset.record_session_chain(fake_project, "/logs/c.jsonl", "/logs/d.jsonl")
+    with open(chain_file) as fh:
+        lines = fh.readlines()
+    record_no_reason = json.loads(lines[-1])
+    test("no reason when omitted", "reason" not in record_no_reason)
 
     context_reset.get_project_logs_dir = orig_fn
 
@@ -731,9 +762,7 @@ with tempfile.TemporaryDirectory() as d:
     os.makedirs(fake_project)
 
     # Create a fake logs dir with a recently-written transcript
-    logs_slug = os.path.abspath(fake_project).replace("\\", "-").replace("/", "-").replace(":", "-")
-    if logs_slug.startswith("-"):
-        logs_slug = logs_slug[1:]
+    logs_slug = re.sub(r'[^a-zA-Z0-9-]', '-', os.path.abspath(fake_project))
     fake_logs = os.path.join(d, "dotclaude", "projects", logs_slug)
     os.makedirs(fake_logs)
     fresh_jsonl = os.path.join(fake_logs, "active-session.jsonl")
