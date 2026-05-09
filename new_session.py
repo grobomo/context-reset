@@ -853,6 +853,7 @@ def build_launch_cmd(project_dir, prompt, tab_title, tab_color):
         return [
             'wt', '-w', '0', 'new-tab',
             '--title', safe_title,
+            '--suppressApplicationTitle',
             '--tabColor', tab_color,
             '--startingDirectory', project_dir,
             '--',
@@ -894,6 +895,7 @@ def build_launch_cmd(project_dir, prompt, tab_title, tab_color):
             cmd += ['--profile', profile_id]
         cmd += [
             '--title', safe_title,
+            '--suppressApplicationTitle',
             '--tabColor', tab_color,
             '--startingDirectory', win_dir,
             '--', 'wsl.exe', 'bash', launcher,
