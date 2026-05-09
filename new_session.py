@@ -1156,15 +1156,16 @@ def _kill_old_tab_wsl(shell_pid, close_tab):
     kill_script = (
         f'import os, signal, time, json\n'
         f'time.sleep(0.5)\n'
-        f'os.kill({shell_pid}, signal.SIGKILL)\n'
+        f'os.kill({int(shell_pid)}, signal.SIGKILL)\n'
     )
     if close_tab and settings_path:
+        safe_path = repr(settings_path)
         kill_script += (
             f'time.sleep(0.3)\n'
             f'try:\n'
-            f'    s = json.load(open("{settings_path}"))\n'
+            f'    s = json.load(open({safe_path}))\n'
             f'    s.setdefault("profiles", {{}}).setdefault("defaults", {{}})["closeOnExit"] = "graceful"\n'
-            f'    json.dump(s, open("{settings_path}", "w"), indent=4, ensure_ascii=False)\n'
+            f'    json.dump(s, open({safe_path}, "w"), indent=4, ensure_ascii=False)\n'
             f'except Exception:\n'
             f'    pass\n'
         )
