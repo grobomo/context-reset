@@ -23,6 +23,7 @@ Audit log: ~/.claude/context-reset/YYYY-MM-DD.log (rotated daily)
 import argparse
 import base64
 import csv
+import glob
 import io
 import json
 import re
@@ -1017,10 +1018,15 @@ def kill_old_tab(shell_pid, close_tab=False):
     On Windows: launches a detached Python subprocess to taskkill the tree,
     because taskkill /T would kill us too. Optionally toggles WT closeOnExit.
 
+    On WSL: toggles closeOnExit via WT settings, then SIGTERMs the shell.
+    Plain SIGTERM doesn't close the WT tab — closeOnExit=always is needed.
+
     On Unix: sends SIGTERM to the shell's process group.
     """
     if IS_WIN:
         _kill_old_tab_windows(shell_pid, close_tab)
+    elif IS_WSL:
+        _kill_old_tab_wsl(shell_pid, close_tab)
     else:
         _kill_old_tab_unix(shell_pid)
 
@@ -1118,6 +1124,60 @@ def _kill_old_tab_windows(shell_pid, close_tab):
     sys.exit(0)
 
 
+def _get_wt_settings_path_wsl():
+    """Return WT settings.json path accessible from WSL."""
+    try:
+        win_user = subprocess.check_output(
+            ['cmd.exe', '/C', 'echo', '%USERNAME%'],
+            text=True, stderr=subprocess.DEVNULL
+        ).strip()
+    except Exception:
+        win_user = None
+    if not win_user or '%' in win_user:
+        for candidate in glob.glob('/mnt/c/Users/*/AppData/Local/Packages/Microsoft.WindowsTerminal_8wekyb3d8bbwe/LocalState/settings.json'):
+            return candidate
+        return None
+    return f'/mnt/c/Users/{win_user}/AppData/Local/Packages/Microsoft.WindowsTerminal_8wekyb3d8bbwe/LocalState/settings.json'
+
+
+def _kill_old_tab_wsl(shell_pid, close_tab):
+    log("=== Context reset complete ===")
+    if close_tab:
+        settings_path = _get_wt_settings_path_wsl()
+        if settings_path and os.path.exists(settings_path):
+            try:
+                with open(settings_path, 'r', encoding='utf-8') as f:
+                    settings = json.load(f)
+                settings.setdefault("profiles", {}).setdefault("defaults", {})["closeOnExit"] = "always"
+                with open(settings_path, 'w', encoding='utf-8') as f:
+                    json.dump(settings, f, indent=4, ensure_ascii=False)
+                log("closeOnExit -> always (WSL)")
+            except Exception as e:
+                log(f"WARNING: failed to set closeOnExit: {e}")
+    try:
+        os.killpg(os.getpgid(shell_pid), signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    except PermissionError:
+        try:
+            os.kill(shell_pid, signal.SIGTERM)
+        except Exception:
+            pass
+    if close_tab:
+        time.sleep(0.3)
+        if settings_path and os.path.exists(settings_path):
+            try:
+                with open(settings_path, 'r', encoding='utf-8') as f:
+                    settings = json.load(f)
+                settings.setdefault("profiles", {}).setdefault("defaults", {})["closeOnExit"] = "graceful"
+                with open(settings_path, 'w', encoding='utf-8') as f:
+                    json.dump(settings, f, indent=4, ensure_ascii=False)
+                log("closeOnExit -> graceful (WSL)")
+            except Exception:
+                pass
+    sys.exit(0)
+
+
 def _kill_old_tab_unix(shell_pid):
     log("=== Context reset complete ===")
     try:
@@ -1125,7 +1185,6 @@ def _kill_old_tab_unix(shell_pid):
     except ProcessLookupError:
         pass
     except PermissionError:
-        # Fall back to killing just the shell
         try:
             os.kill(shell_pid, signal.SIGTERM)
         except Exception:
