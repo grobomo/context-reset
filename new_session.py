@@ -775,6 +775,7 @@ def _find_shell_pid_unix():
         'gnome-terminal-', 'gnome-terminal', 'konsole', 'xfce4-terminal',
         'terminal', 'iterm2', 'alacritty', 'kitty', 'wezterm', 'tmux',
         'screen', 'login', 'sshd', 'init', 'launchd', 'systemd',
+        'relay', 'sessionleader',
     )
 
     pid = os.getpid()
@@ -793,7 +794,7 @@ def _find_shell_pid_unix():
     for i, (cpid, name) in enumerate(chain):
         if name in shell_names and i + 1 < len(chain):
             _, parent_name = chain[i + 1]
-            if any(parent_name.startswith(t) for t in terminal_hosts) or chain[i + 1][0] == 1:
+            if any(parent_name.lower().startswith(t) for t in terminal_hosts) or chain[i + 1][0] == 1:
                 tab_shell = cpid
                 log(f"  tab shell: PID {cpid} ({name}), parent {chain[i + 1]}")
                 break
