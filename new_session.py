@@ -861,7 +861,8 @@ def build_launch_cmd(project_dir, prompt, tab_title, tab_color):
         ]
     elif IS_WSL:
         # WSL can call wt.exe to open Windows Terminal tabs, giving us the
-        # same tab UX (titles, colors, focus-tab) as native Windows.
+        # same tab UX (titles, colors) as native Windows. Focus restore is
+        # handled by the monitor thread rather than inline focus-tab.
         prompt_file = os.path.join(project_dir, '.claude-next-prompt')
         with open(prompt_file, 'w', encoding='utf-8') as f:
             f.write(prompt)

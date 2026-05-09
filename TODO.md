@@ -2,24 +2,27 @@
 
 ## Current Status
 
-v1.2.0 — Stable, feature-complete. 197 tests (162 + 35 task_claims). CI green on 3 OS x 2 Python.
+v1.3.0 — Stable. 188 tests (153 + 35 task_claims), 0 failures. CI green on 3 OS x 2 Python.
 
 | Platform | Tests | Verified |
 |----------|-------|----------|
 | Windows 11 | 162 | Live + CI |
 | Windows Server 2022 | 115 | EC2 |
 | Ubuntu 22.04 | 105 | EC2 |
-| WSL2 | 140 | Live |
+| WSL2 | 153 | Live |
 | macOS (Darwin arm64) | 140 | EC2 |
 
-67 PRs merged. Key capabilities:
+69 PRs merged. Key capabilities:
 - Two scripts: `context_reset.py` (kills old tab) / `new_session.py` (keeps old tab)
 - SESSION_STATE.md auto-handoff (readable transcript, 8K token cap)
+- `--reason` arg for spawn-reason tracking in session chains
 - Focus monitor thread (catches WT async steals, 5/5 live pass)
 - Duplicate session guard (transcript age check)
 - Pre-trust workspace (no trust dialog)
+- WSL transcript path detection (leading-dash encoding match)
 - Pip-installable (`pip install git+https://github.com/grobomo/context-reset`)
 - Bootstrap script for team onboarding
+- `scripts/close-dead-tabs.ps1` utility for cleaning up dead WT tabs
 
 ## Open Tasks
 

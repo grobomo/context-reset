@@ -455,7 +455,7 @@ with tempfile.TemporaryDirectory() as d:
         test("WSL uses wsl.exe", "wsl.exe" in cmd_wsl)
         test("WSL has tab title", "wsl-title" in cmd_wsl)
         test("WSL has tab color", "#2D5F2D" in cmd_wsl)
-        test("WSL has focus-tab", "focus-tab" in cmd_wsl and "--previous" in cmd_wsl)
+        test("WSL no inline focus-tab (uses monitor thread)", "focus-tab" not in cmd_wsl)
         # Prompt is written to file (not inline)
         prompt_file = os.path.join(d, '.claude-next-prompt')
         test("WSL writes prompt file", os.path.exists(prompt_file))
@@ -466,7 +466,7 @@ with tempfile.TemporaryDirectory() as d:
         # Semicolons in prompt don't reach WT args
         cmd_semi = context_reset.build_launch_cmd(d, "return null; next", "t", "#000000")
         semi_indices = [i for i, c in enumerate(cmd_semi) if c == ";"]
-        test("WSL prompt semicolons safe", len(semi_indices) == 1)
+        test("WSL prompt semicolons safe (none in cmd)", len(semi_indices) == 0)
     finally:
         context_reset.IS_WSL = old_wsl
         context_reset.IS_WIN = old_win
