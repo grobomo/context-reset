@@ -20,6 +20,8 @@ from datetime import datetime
 
 DEFAULT_HOST = "api.anthropic.com"
 DEFAULT_PORT = 443
+DEFAULT_PROXY_HOST = "127.0.0.1"
+DEFAULT_PROXY_PORT = 4100
 DEFAULT_INTERVAL = 60
 DEFAULT_MAX_WAIT = 1800
 DEFAULT_STALL_THRESHOLD = 120
@@ -48,6 +50,50 @@ def check_api_health(host=DEFAULT_HOST, port=DEFAULT_PORT, timeout=5):
         return True
     except (socket.timeout, socket.error, OSError):
         return False
+
+
+def diagnose(proxy_host=DEFAULT_PROXY_HOST, proxy_port=DEFAULT_PROXY_PORT,
+             upstream_host=DEFAULT_HOST, upstream_port=DEFAULT_PORT, timeout=5):
+    """Two-layer health check: proxy + upstream. Returns diagnosis dict.
+
+    Returns:
+        {"proxy": bool, "upstream": bool, "detail": str, "cause": str}
+        cause is one of: "healthy", "proxy_down", "upstream_down", "both_down"
+    """
+    import urllib.request
+    import json as _json
+
+    result = {"proxy": False, "upstream": False, "detail": "", "cause": "both_down"}
+
+    # Layer 1: Check proxy /health endpoint (returns upstream status too)
+    try:
+        url = f"http://{proxy_host}:{proxy_port}/health"
+        req = urllib.request.Request(url, method="GET")
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = _json.loads(resp.read().decode())
+            result["proxy"] = True
+            result["upstream"] = data.get("upstream") == "reachable"
+            if result["upstream"]:
+                result["cause"] = "healthy"
+                result["detail"] = "Proxy and upstream both healthy"
+            else:
+                result["cause"] = "upstream_down"
+                result["detail"] = f"Proxy OK, upstream unreachable (checked by proxy)"
+            return result
+    except Exception:
+        pass
+
+    # Proxy didn't respond — check upstream directly
+    result["upstream"] = check_api_health(upstream_host, upstream_port, timeout)
+    if result["upstream"]:
+        result["cause"] = "proxy_down"
+        result["detail"] = (f"Proxy at {proxy_host}:{proxy_port} is down, "
+                            f"but {upstream_host} is reachable directly")
+    else:
+        result["cause"] = "both_down"
+        result["detail"] = (f"Both proxy ({proxy_host}:{proxy_port}) and "
+                            f"upstream ({upstream_host}) are unreachable")
+    return result
 
 
 def wait_for_api(interval=DEFAULT_INTERVAL, max_wait=DEFAULT_MAX_WAIT,
@@ -139,6 +185,8 @@ def main():
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--check", action="store_true",
                        help="Check API health (exit 0=up, 1=down)")
+    group.add_argument("--diagnose", action="store_true",
+                       help="Two-layer check: proxy + upstream (shows root cause)")
     group.add_argument("--wait", action="store_true",
                        help="Block until API is healthy")
     group.add_argument("--watch", metavar="PROJECT_DIR",
@@ -152,6 +200,10 @@ def main():
                         help=f"API host to check (default: {DEFAULT_HOST})")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT,
                         help=f"API port to check (default: {DEFAULT_PORT})")
+    parser.add_argument("--proxy-host", default=DEFAULT_PROXY_HOST,
+                        help=f"Proxy host (default: {DEFAULT_PROXY_HOST})")
+    parser.add_argument("--proxy-port", type=int, default=DEFAULT_PROXY_PORT,
+                        help=f"Proxy port (default: {DEFAULT_PROXY_PORT})")
     args = parser.parse_args()
 
     if args.check:
@@ -161,6 +213,16 @@ def main():
         else:
             log("API is unreachable")
         sys.exit(0 if healthy else 1)
+
+    elif args.diagnose:
+        result = diagnose(
+            proxy_host=args.proxy_host, proxy_port=args.proxy_port,
+            upstream_host=args.host, upstream_port=args.port,
+        )
+        log(f"Diagnosis: {result['cause']} — {result['detail']}")
+        log(f"  Proxy ({args.proxy_host}:{args.proxy_port}): {'UP' if result['proxy'] else 'DOWN'}")
+        log(f"  Upstream ({args.host}): {'UP' if result['upstream'] else 'DOWN'}")
+        sys.exit(0 if result["cause"] == "healthy" else 1)
 
     elif args.wait:
         recovered = wait_for_api(

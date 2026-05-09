@@ -849,6 +849,34 @@ with _mock_api.patch('api_check.is_session_stalled', return_value=True):
     with _mock_api.patch('api_check.check_api_health', return_value=True):
         test("watch: stalled + api healthy -> False", not api_check.watch_and_respawn("/tmp"))
 
+# diagnose — mock proxy healthy + upstream healthy
+def _mock_urlopen_healthy(*a, **kw):
+    class FakeResp:
+        def read(self): return b'{"status":"ok","upstream":"reachable","proxy":"running"}'
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+    return FakeResp()
+
+with _mock_api.patch('urllib.request.urlopen', _mock_urlopen_healthy):
+    d = api_check.diagnose()
+    test("diagnose: proxy healthy", d["proxy"] is True)
+    test("diagnose: upstream healthy", d["upstream"] is True)
+    test("diagnose: cause=healthy", d["cause"] == "healthy")
+
+# diagnose — proxy down, upstream up
+with _mock_api.patch('urllib.request.urlopen', side_effect=Exception("connection refused")):
+    with _mock_api.patch('api_check.check_api_health', return_value=True):
+        d2 = api_check.diagnose()
+        test("diagnose: proxy down", d2["proxy"] is False)
+        test("diagnose: upstream up", d2["upstream"] is True)
+        test("diagnose: cause=proxy_down", d2["cause"] == "proxy_down")
+
+# diagnose — both down
+with _mock_api.patch('urllib.request.urlopen', side_effect=Exception("refused")):
+    with _mock_api.patch('api_check.check_api_health', return_value=False):
+        d3 = api_check.diagnose()
+        test("diagnose: both down", d3["cause"] == "both_down")
+
 # --- Summary ---
 print(f"\n{'='*40}")
 print(f"Results: {PASS} passed, {FAIL} failed")
