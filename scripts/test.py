@@ -846,7 +846,7 @@ with _mock_api.patch('api_check.is_session_stalled', return_value=False):
 
 # watch_and_respawn — stalled but API healthy (different issue)
 with _mock_api.patch('api_check.is_session_stalled', return_value=True):
-    with _mock_api.patch('api_check.check_api_health', return_value=True):
+    with _mock_api.patch('api_check.diagnose', return_value={"cause": "healthy", "proxy": True, "upstream": True, "detail": "ok"}):
         test("watch: stalled + api healthy -> False", not api_check.watch_and_respawn("/tmp"))
 
 # diagnose — mock proxy healthy + upstream healthy

@@ -155,12 +155,13 @@ def watch_and_respawn(project_dir, interval=DEFAULT_INTERVAL,
         log("Session is active (not stalled), nothing to do")
         return False
 
-    log("Session stalled, checking API health...")
-    if check_api_health():
-        log("API is healthy but session stalled — may be a different issue")
+    log("Session stalled, diagnosing...")
+    diag = diagnose()
+    if diag["cause"] == "healthy":
+        log("Both proxy and upstream healthy but session stalled — may be a different issue")
         return False
-
-    log("API is down and session is stalled. Waiting for recovery...")
+    log(f"Outage detected: {diag['cause']} — {diag['detail']}")
+    log("Waiting for recovery...")
     recovered = wait_for_api(interval=interval, max_wait=max_wait)
     if not recovered:
         log("API did not recover within timeout. Giving up.")
