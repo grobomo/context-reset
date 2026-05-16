@@ -58,7 +58,7 @@ See CHANGELOG.md for full history. Major milestones:
 
 ## Bugs (dispatched from publishable-audit session 2026-05-11)
 
-- [ ] T040: **Working subdirectory lost on context reset** — CLAUDE_PROJECT_DIR is always the git root. When user works in a subdirectory (e.g. labs/cegp/), context reset opens new session at root, losing subdirectory context. New session picks up wrong tasks. Fix: save working subdir in SESSION_STATE.md or accept --working-dir arg. Confirmed via 2026-05-15 audit log.
+- [ ] T040: **Working subdirectory lost on context reset** — CLAUDE_PROJECT_DIR is always the git root. When user works in a subdirectory (e.g. labs/cegp/), context reset opens new session at root, losing subdirectory context. New session picks up wrong tasks. Fix: add --working-dir arg to new_session.py, write to SESSION_STATE.md, use as startingDirectory. Confirmed via 2026-05-15 audit log.
 
 - [ ] T039: **cwd-drift gate blocks new_session.py spawner** — When a Claude session in project A calls `new_session.py --project-dir /path/to/project-B`, the cwd-drift gate pattern-matches `context-reset` in the *script path* and blocks the command, even though the target is project B. The gate should allow `new_session.py` and `context_reset.py` invocations regardless of calling project, since they're infrastructure scripts not project-scoped work. Repro: from publishable-audit, run `python3 .../context-reset/new_session.py --project-dir .../llm-token-tracker --no-close` — blocked with "tried to access context-reset". Fix: either whitelist context-reset script paths in the cwd-drift gate, or move the scripts to a shared location that isn't project-scoped.
 

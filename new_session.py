@@ -473,7 +473,7 @@ def _ensure_gitignored(project_dir, entry):
         pass
 
 
-def write_session_state(project_dir, reason=None):
+def write_session_state(project_dir, reason=None, working_dir=None):
     """Write SESSION_STATE.md with extracted transcript context for the next session."""
     context = extract_session_context(project_dir)
     if not context:
@@ -487,6 +487,8 @@ def write_session_state(project_dir, reason=None):
             f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
             if reason:
                 f.write(f"## Spawn Reason\n\n{reason}\n\n")
+            if working_dir:
+                f.write(f"## Working Directory\n\n{working_dir}\n\n")
             f.write("## Last Session Conversation\n\n")
             f.write(context)
             f.write("\n")
@@ -498,8 +500,8 @@ def write_session_state(project_dir, reason=None):
         return None
 
 
-def build_prompt(project_dir, reason=None):
-    state_file = write_session_state(project_dir, reason=reason)
+def build_prompt(project_dir, reason=None, working_dir=None):
+    state_file = write_session_state(project_dir, reason=reason, working_dir=working_dir)
     base = (
         "Context was reset. Do not ask what to do. "
         "Pick up where the last session left off. "
@@ -1421,6 +1423,8 @@ def main():
                         help="Kill current tab without launching a new one (self-close)")
     parser.add_argument("--reason", default=None,
                         help="Why this session was spawned (e.g., 'stop-hook: context full')")
+    parser.add_argument("--working-dir", default=None,
+                        help="Subdirectory the user was working in (preserved across resets)")
     parser.add_argument("--wait-for-api", action="store_true",
                         help="Wait for API health before launching (polls every 60s, max 30min)")
     args = parser.parse_args()
@@ -1459,6 +1463,16 @@ def main():
             return
         log(f"Cross-project session: saving state in {project_dir}, launching in {launch_dir}")
 
+    # T040: If --working-dir specified, use it as the starting directory
+    effective_launch_dir = launch_dir
+    if args.working_dir:
+        wd = os.path.abspath(os.path.join(launch_dir, args.working_dir))
+        if os.path.isdir(wd):
+            effective_launch_dir = wd
+            log(f"Working dir override: {wd}")
+        else:
+            log(f"WARNING: --working-dir '{args.working_dir}' does not exist under {launch_dir}, ignoring")
+
     launch_name = os.path.basename(launch_dir)
 
     # --stop mode: kill current tab, no new session
@@ -1483,7 +1497,7 @@ def main():
 
     # Build launch command
     mode_label = "Context reset" if close_old else "New session"
-    prompt = args.prompt or build_prompt(launch_dir, reason=args.reason)
+    prompt = args.prompt or build_prompt(launch_dir, reason=args.reason, working_dir=args.working_dir)
     reason_suffix = f" (reason: {args.reason})" if args.reason else ""
     log(f"=== {mode_label} started for {launch_name}{reason_suffix} ===")
     log(f"Project dir (state): {project_dir}")
@@ -1497,7 +1511,7 @@ def main():
     tab_title = launch_name
     tab_color = get_tab_color(launch_dir)
     log(f"Tab: title='{tab_title}', color={tab_color}")
-    cmd = build_launch_cmd(launch_dir, prompt, tab_title, tab_color)
+    cmd = build_launch_cmd(effective_launch_dir, prompt, tab_title, tab_color)
 
     if args.dry_run:
         log(f"DRY RUN - command: {cmd}")
